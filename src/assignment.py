@@ -1,0 +1,428 @@
+"""
+Two-stage block-to-school assignment.
+
+Constraints (priority order):
+  1. HARD: Every school must be at or under capacity.
+  2. SOFT: Community continuity — zones should be contiguous.
+  3. SOFT: Minimize travel distance.
+
+Stage 1 — Guaranteed-seed, capacity-bounded flood-fill
+  Each school pre-assigned a unique seed block (nearest uncontested centroid).
+
+  Phase A: Grow from seeds (priority = drive distance), each school stops at
+    its proportional target: total_students * capacity / total_capacity.
+
+  Phase B: Remaining blocks go to adjacent zones, hard capacity respected.
+
+  Phase C: Any remaining orphan blocks (no adjacent under-capacity zone) get
+    assigned to the nearest GEOGRAPHICALLY ADJACENT school zone first; only
+    fall back to pure drive distance if no adjacent zone exists.
+
+Stage 2 — Hard capacity enforcement
+  For each school above capacity:
+    - Sort zone blocks by drive distance DESC (marginal first).
+    - For each marginal block, try moves in this priority order:
+        1. Contiguous move: preserves source contiguity AND block is adjacent
+           to target zone.
+        2. Adjacent-zone move: preserves source contiguity, target zone has
+           at least one neighbour of this block (zone grows toward block).
+        3. Non-contiguous move (last resort): any under-capacity school,
+           but prefer ones geographically adjacent to the block's neighbours.
+    - Repeat until all schools within capacity.
+"""
+import heapq
+import numpy as np
+from src.contiguity import removal_preserves_contiguity, addition_is_contiguous
+from src.config import WALK_THRESHOLD_METERS
+
+
+def _students_in_zone(school_id, assignments, blocks_gdf):
+    total = 0.0
+    for bid, sid in assignments.items():
+        if sid == school_id:
+            total += blocks_gdf.loc[bid, "students"]
+    return total
+
+
+def _assign_seed_blocks(blocks_gdf, open_schools):
+    """Guarantee each school gets a unique nearest seed block."""
+    school_ids = list(open_schools.index)
+    all_block_ids = list(blocks_gdf["block_id"])
+    school_pts = {sid: open_schools.loc[sid, "geometry"] for sid in school_ids}
+    block_pts  = {bid: blocks_gdf.loc[bid, "centroid_proj"] for bid in all_block_ids}
+
+    def inter_min_dist(sid):
+        return min(
+            (school_pts[sid].distance(school_pts[o]) for o in school_ids if o != sid),
+            default=float("inf"),
+        )
+
+    seeds = {}
+    claimed = set()
+    for sid in sorted(school_ids, key=inter_min_dist):
+        best_bid, best_dist = None, float("inf")
+        for bid in all_block_ids:
+            if bid in claimed:
+                continue
+            d = school_pts[sid].distance(block_pts[bid])
+            if d < best_dist:
+                best_dist, best_bid = d, bid
+        if best_bid is not None:
+            seeds[best_bid] = sid
+            claimed.add(best_bid)
+    return seeds
+
+
+def _adjacent_zone_schools(block_id, open_school_ids, assignments, adjacency):
+    """
+    Return the set of school_ids that have at least one zone block adjacent
+    to block_id. This is used to prefer community-continuous moves.
+    """
+    adj_schools = set()
+    for nbr in adjacency.neighbors(block_id):
+        sid = assignments.get(nbr)
+        if sid in open_school_ids:
+            adj_schools.add(sid)
+    return adj_schools
+
+
+def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
+    """Stage 1: Three-phase capacity-bounded flood-fill."""
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+    total_capacity = sum(capacities.values())
+    total_students = float(blocks_gdf["students"].sum())
+
+    target_loads = {
+        sid: total_students * capacities[sid] / total_capacity
+        for sid in open_school_ids
+    }
+
+    assignments = {}
+    school_loads = {sid: 0.0 for sid in open_school_ids}
+    at_target  = set()
+    at_capacity = set()
+    assigned   = set()
+    in_heap    = set()
+    heap       = []
+
+    # Guaranteed seed blocks
+    seeds = _assign_seed_blocks(blocks_gdf, open_schools)
+    for bid, sid in seeds.items():
+        assigned.add(bid)
+        assignments[bid] = sid
+        school_loads[sid] += blocks_gdf.loc[bid, "students"]
+        if school_loads[sid] >= target_loads[sid]:
+            at_target.add(sid)
+        if school_loads[sid] >= capacities[sid]:
+            at_capacity.add(sid)
+        for nbr in adjacency.neighbors(bid):
+            if nbr not in assigned and (nbr, sid) not in in_heap:
+                dd = drive_df.loc[nbr, sid]
+                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                in_heap.add((nbr, sid))
+
+    # Phase A: grow until proportional target
+    while heap:
+        dist, bid, sid = heapq.heappop(heap)
+        if bid in assigned or sid in at_target:
+            continue
+        assigned.add(bid)
+        assignments[bid] = sid
+        school_loads[sid] += blocks_gdf.loc[bid, "students"]
+        if school_loads[sid] >= target_loads[sid]:
+            at_target.add(sid)
+            if school_loads[sid] >= capacities[sid]:
+                at_capacity.add(sid)
+            if len(at_target) == len(open_school_ids):
+                break
+            continue
+        for nbr in adjacency.neighbors(bid):
+            if nbr not in assigned and (nbr, sid) not in in_heap:
+                dd = drive_df.loc[nbr, sid]
+                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                in_heap.add((nbr, sid))
+
+    # Phase B: remaining blocks → adjacent zones, hard cap respected
+    unassigned = set(blocks_gdf["block_id"]) - assigned
+    if unassigned:
+        p2_heap = []
+        p2_in_heap = set()
+        for bid in list(assigned):
+            sid = assignments[bid]
+            if sid in at_capacity:
+                continue
+            for nbr in adjacency.neighbors(bid):
+                if nbr in unassigned and (nbr, sid) not in p2_in_heap:
+                    dd = drive_df.loc[nbr, sid]
+                    heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                    p2_in_heap.add((nbr, sid))
+
+        while p2_heap and unassigned:
+            dist, bid, sid = heapq.heappop(p2_heap)
+            if bid not in unassigned:
+                continue
+            if school_loads[sid] >= capacities[sid]:
+                continue
+            unassigned.discard(bid)
+            assigned.add(bid)
+            assignments[bid] = sid
+            school_loads[sid] += blocks_gdf.loc[bid, "students"]
+            if school_loads[sid] >= capacities[sid]:
+                at_capacity.add(sid)
+            if sid not in at_capacity:
+                for nbr in adjacency.neighbors(bid):
+                    if nbr in unassigned and (nbr, sid) not in p2_in_heap:
+                        dd = drive_df.loc[nbr, sid]
+                        heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                        p2_in_heap.add((nbr, sid))
+
+    # Phase C: orphan blocks — prefer adjacent zone first, then nearest by drive
+    remaining = sorted(
+        set(blocks_gdf["block_id"]) - set(assignments.keys()),
+        key=lambda b: blocks_gdf.loc[b, "students"],
+        reverse=True,
+    )
+    for bid in remaining:
+        under_cap = [s for s in open_school_ids if school_loads[s] < capacities[s]]
+        if not under_cap:
+            under_cap = open_school_ids  # all at cap, accept overflow
+
+        # Prefer schools whose zone is geographically adjacent to this block
+        adj_schools = _adjacent_zone_schools(bid, under_cap, assignments, adjacency)
+        candidates = list(adj_schools) if adj_schools else under_cap
+
+        best = min(
+            candidates,
+            key=lambda s: drive_df.loc[bid, s] if np.isfinite(drive_df.loc[bid, s]) else float("inf"),
+        )
+        assignments[bid] = best
+        school_loads[best] += blocks_gdf.loc[bid, "students"]
+
+    return assignments
+
+
+def balance_capacity(assignments, blocks_gdf, open_schools, drive_df, adjacency,
+                     max_iterations=300):
+    """
+    Stage 2: Enforce hard capacity. Move order of preference:
+      1. Contiguous + adjacent-to-target (best for community continuity)
+      2. Contiguous + adjacent zone of target (target zone grows toward block)
+      3. Non-contiguous, but target zone is geographically adjacent (minimise islands)
+      4. Non-contiguous to any under-capacity school (last resort)
+    """
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+
+    for _ in range(max_iterations):
+        changed = False
+
+        loads = {sid: _students_in_zone(sid, assignments, blocks_gdf)
+                 for sid in open_school_ids}
+        overloaded = sorted(
+            [(sid, loads[sid] - capacities[sid]) for sid in open_school_ids
+             if loads[sid] > capacities[sid]],
+            key=lambda x: x[1], reverse=True,
+        )
+        if not overloaded:
+            break
+
+        for school_id, _ in overloaded:
+            zone_blocks = sorted(
+                [b for b, s in assignments.items() if s == school_id],
+                key=lambda b: drive_df.loc[b, school_id],
+                reverse=True,
+            )
+
+            for block_id in zone_blocks:
+                if _students_in_zone(school_id, assignments, blocks_gdf) <= capacities[school_id]:
+                    break
+                if not removal_preserves_contiguity(block_id, school_id, assignments, adjacency):
+                    continue
+
+                under_cap_alts = sorted(
+                    [s for s in open_school_ids if s != school_id and loads[s] < capacities[s]],
+                    key=lambda s: drive_df.loc[block_id, s],
+                )
+                if not under_cap_alts:
+                    continue
+
+                # Classify alternatives by community-continuity quality
+                adj_zone_schools = _adjacent_zone_schools(
+                    block_id, open_school_ids, assignments, adjacency
+                )
+
+                # Tier 1: contiguous move + block adjacent to target zone
+                moved = False
+                for alt in under_cap_alts:
+                    if addition_is_contiguous(block_id, alt, assignments, adjacency):
+                        assignments[block_id] = alt
+                        loads[alt] += blocks_gdf.loc[block_id, "students"]
+                        loads[school_id] -= blocks_gdf.loc[block_id, "students"]
+                        changed = True
+                        moved = True
+                        break
+
+                if moved:
+                    continue
+
+                # Tier 2: no full contiguity, but move to a geographically adjacent zone
+                adj_under_cap = [s for s in under_cap_alts if s in adj_zone_schools]
+                if adj_under_cap:
+                    best_alt = adj_under_cap[0]  # already sorted by drive dist
+                    assignments[block_id] = best_alt
+                    loads[best_alt] += blocks_gdf.loc[block_id, "students"]
+                    loads[school_id] -= blocks_gdf.loc[block_id, "students"]
+                    changed = True
+                    continue
+
+                # Tier 3: non-contiguous, nearest under-capacity school
+                best_alt = under_cap_alts[0]
+                assignments[block_id] = best_alt
+                loads[best_alt] += blocks_gdf.loc[block_id, "students"]
+                loads[school_id] -= blocks_gdf.loc[block_id, "students"]
+                changed = True
+
+        if not changed:
+            break
+
+    return assignments
+
+
+def _isolated_fragment(block_id, school_id, assignments, adjacency):
+    """
+    If removing block_id from school_id's zone would disconnect the zone,
+    return the smaller sub-component that would become isolated (i.e. the
+    "peninsula" hanging off block_id).  Returns None if removal is safe or
+    if the zone has only one block.
+    """
+    import networkx as nx
+    zone_blocks = [b for b, s in assignments.items() if s == school_id and b != block_id]
+    if len(zone_blocks) == 0:
+        return None
+    sub = adjacency.subgraph(zone_blocks)
+    components = list(nx.connected_components(sub))
+    if len(components) <= 1:
+        return None  # still connected — no fragment
+    # Return the smallest component (the peninsula to migrate)
+    return min(components, key=len)
+
+
+def smooth_bussed_communities(assignments, blocks_gdf, open_schools, walk_df, drive_df,
+                               adjacency, max_passes=10):
+    """
+    Stage 3: Keep bussed micro-communities together.
+
+    For every non-walkable block, check whether the majority of its adjacent
+    neighbours go to a different school.  If so, try to move it (and any
+    isolated peninsula it would leave behind) to the majority school,
+    subject to capacity and source-contiguity constraints.
+
+    Peninsula logic: if moving a single block would disconnect the source
+    zone, we collect the now-isolated fragment and move the whole group
+    together — so a "finger" of bussed blocks from the same neighbourhood
+    travels to the same school as its surrounding neighbours.
+    """
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+
+    for _ in range(max_passes):
+        changed = False
+        loads = {sid: sum(blocks_gdf.loc[b, "students"]
+                          for b, s in assignments.items() if s == sid)
+                 for sid in open_school_ids}
+
+        for bid in list(assignments.keys()):
+            current_sid = assignments[bid]
+
+            # Only smooth blocks that need to be bussed to their assigned school
+            wd = walk_df.loc[bid, current_sid] if current_sid in walk_df.columns else float("inf")
+            if np.isfinite(wd) and wd <= WALK_THRESHOLD_METERS:
+                continue
+
+            # Count how many assigned neighbours go to each school
+            neighbor_counts = {}
+            for nbr in adjacency.neighbors(bid):
+                nsid = assignments.get(nbr)
+                if nsid is not None:
+                    neighbor_counts[nsid] = neighbor_counts.get(nsid, 0) + 1
+
+            if not neighbor_counts:
+                continue
+
+            majority_sid = max(neighbor_counts, key=neighbor_counts.get)
+            if majority_sid == current_sid:
+                continue
+
+            # Strict majority required
+            total_assigned_nbrs = sum(neighbor_counts.values())
+            if neighbor_counts[majority_sid] <= total_assigned_nbrs / 2:
+                continue
+
+            # Determine the set of blocks to move: just this block, or the
+            # whole peninsula it's anchoring
+            if removal_preserves_contiguity(bid, current_sid, assignments, adjacency):
+                to_move = {bid}
+            else:
+                fragment = _isolated_fragment(bid, current_sid, assignments, adjacency)
+                if fragment is None:
+                    continue  # shouldn't happen, but skip to be safe
+                to_move = {bid} | set(fragment)
+
+            # All blocks in the group must also be non-walkable (don't drag
+            # a walkable block away from its natural zone)
+            if any(
+                np.isfinite(walk_df.loc[b, current_sid]) and
+                walk_df.loc[b, current_sid] <= WALK_THRESHOLD_METERS
+                for b in to_move
+            ):
+                continue
+
+            # Capacity: target school must fit the whole group
+            group_students = sum(blocks_gdf.loc[b, "students"] for b in to_move)
+            if loads[majority_sid] + group_students > capacities[majority_sid]:
+                continue
+
+            # Move entire group
+            for b in to_move:
+                assignments[b] = majority_sid
+            loads[majority_sid] += group_students
+            loads[current_sid] -= group_students
+            changed = True
+
+        if not changed:
+            break
+
+    return assignments
+
+
+def run_scenario(scenario, blocks_gdf, all_schools_gdf, walk_df, drive_df, adjacency):
+    """Run full two-stage assignment for one closure scenario."""
+    closed = scenario["closed"]
+    open_schools = (
+        all_schools_gdf[all_schools_gdf["school_id"] != closed].copy()
+        if closed else all_schools_gdf.copy()
+    )
+
+    print(f"  Stage 1 (capacity-bounded flood-fill) ...")
+    assignments = initial_assignment(
+        blocks_gdf, open_schools, walk_df, drive_df, adjacency
+    )
+
+    for sid in open_schools["school_id"]:
+        load = _students_in_zone(sid, assignments, blocks_gdf)
+        cap  = open_schools.loc[sid, "capacity"]
+        status = "✓" if load <= cap else f"OVER by {load-cap:.0f}"
+        print(f"    {sid}: {load:.0f}/{cap} {status}")
+
+    print(f"  Stage 2 (capacity + contiguity enforcement) ...")
+    assignments = balance_capacity(
+        assignments, blocks_gdf, open_schools, drive_df, adjacency
+    )
+
+    print(f"  Stage 3 (bussed community cohesion smoothing) ...")
+    assignments = smooth_bussed_communities(
+        assignments, blocks_gdf, open_schools, walk_df, drive_df, adjacency
+    )
+
+    return assignments, open_schools

@@ -1,0 +1,14 @@
+# Cached road networks and distance matrices (large, auto-regenerated)
+cache/
+
+# Snapshots (local backups, not needed for collaboration)
+snapshots/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# macOS
+.DS_Store
