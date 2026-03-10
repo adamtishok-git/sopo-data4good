@@ -4,7 +4,7 @@ Load and prepare census block geometries and school point data.
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
-from src.config import SCHOOLS, BLOCKS_GEOJSON, TOTAL_ENROLLMENT
+from src.config import SCHOOLS, BLOCKS_GEOJSON, TOTAL_K4, TOTAL_K1, TOTAL_G24
 
 
 def load_blocks() -> gpd.GeoDataFrame:
@@ -13,12 +13,14 @@ def load_blocks() -> gpd.GeoDataFrame:
 
     Returns a GeoDataFrame with columns:
         block_id, geometry, population, centroid_lat, centroid_lon,
-        students (proportional to POP20), geometry_4326, centroid (Point)
-    CRS: EPSG:4326, then projected to EPSG:32619 (UTM 19N, Maine)
+        students     -- K-4 proportional count  (community zone assignment)
+        students_k1  -- K-1 proportional count  (grade-center PreK-1 band)
+        students_g24 -- 2-4 proportional count  (grade-center 2-4 band)
+        geometry_4326, centroid, centroid_proj
+    CRS: EPSG:32619 (UTM 19N, Maine)
     """
     gdf = gpd.read_file(BLOCKS_GEOJSON)
 
-    # Normalize column names
     gdf = gdf.rename(columns={
         "GEOID20":    "block_id",
         "POP20":      "population",
@@ -26,54 +28,45 @@ def load_blocks() -> gpd.GeoDataFrame:
         "INTPTLON20": "centroid_lon",
     })
 
-    gdf["population"] = pd.to_numeric(gdf["population"], errors="coerce").fillna(0).astype(int)
+    gdf["population"]   = pd.to_numeric(gdf["population"],   errors="coerce").fillna(0).astype(int)
     gdf["centroid_lat"] = pd.to_numeric(gdf["centroid_lat"], errors="coerce")
     gdf["centroid_lon"] = pd.to_numeric(gdf["centroid_lon"], errors="coerce")
 
-    # Build centroid points in 4326
     gdf["centroid"] = gdf.apply(
         lambda r: Point(r["centroid_lon"], r["centroid_lat"]), axis=1
     )
 
-    # Proportional student count per block
     total_pop = gdf["population"].sum()
-    gdf["students"] = (gdf["population"] / total_pop * TOTAL_ENROLLMENT).round(1)
+    gdf["students"]     = (gdf["population"] / total_pop * TOTAL_K4 ).round(2)
+    gdf["students_k1"]  = (gdf["population"] / total_pop * TOTAL_K1 ).round(2)
+    gdf["students_g24"] = (gdf["population"] / total_pop * TOTAL_G24).round(2)
 
-    # Keep geometry in 4326 for folium output
     gdf = gdf.set_crs("EPSG:4326", allow_override=True)
     gdf["geometry_4326"] = gdf["geometry"]
-
-    # Project to UTM 19N for metric distance calculations
     gdf = gdf.to_crs("EPSG:32619")
-
-    # Recompute centroid in projected CRS for network snapping
     gdf["centroid_proj"] = gdf.geometry.centroid
 
     gdf = gdf.set_index("block_id", drop=False)
     gdf.index.name = "idx"
 
     return gdf[["block_id", "geometry", "geometry_4326", "centroid",
-                "centroid_proj", "population", "students",
+                "centroid_proj", "population",
+                "students", "students_k1", "students_g24",
                 "centroid_lat", "centroid_lon"]]
 
 
 def load_schools() -> gpd.GeoDataFrame:
     """
     Build a GeoDataFrame of school point locations from config.
-
-    Returns GeoDataFrame with columns:
-        school_id, geometry (Point), lat, lng, enrollment, capacity
-    CRS: EPSG:32619 (projected)
     """
     records = []
     for name, info in SCHOOLS.items():
         records.append({
-            "school_id":  name,
-            "lat":        info["lat"],
-            "lng":        info["lng"],
-            "enrollment": info["enrollment"],
-            "capacity":   info["capacity"],
-            "geometry":   Point(info["lng"], info["lat"]),
+            "school_id": name,
+            "lat":       info["lat"],
+            "lng":       info["lng"],
+            "capacity":  info["capacity"],
+            "geometry":  Point(info["lng"], info["lat"]),
         })
 
     gdf = gpd.GeoDataFrame(records, crs="EPSG:4326")

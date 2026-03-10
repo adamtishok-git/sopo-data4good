@@ -1,50 +1,42 @@
 """
 Generate per-scenario JSON data files for the web app.
-Run once after run.py to prepare data for the frontend.
-Outputs to webapp/public/data/{scenario}.json
+Includes all 5 assignment modes + per-block grade-band student counts.
 """
 import json, os, pickle
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 
-SCENARIOS = ['brown_closed', 'dyer_closed', 'small_closed', 'kaler_closed']
-CLOSED_MAP = {
-    'brown_closed': 'Brown',
-    'dyer_closed':  'Dyer',
-    'small_closed': 'Small',
-    'kaler_closed': 'Kaler',
-}
-SCHOOLS = {
-    "Brown":   {"lat": 43.63469222922709, "lng": -70.2488528529349,  "capacity": 260, "color": "#E74C3C"},
-    "Dyer":    {"lat": 43.62188281730617, "lng": -70.27491180480025, "capacity": 240, "color": "#3498DB"},
-    "Small":   {"lat": 43.64131092018083, "lng": -70.23385021390395, "capacity": 280, "color": "#2ECC71"},
-    "Skillin": {"lat": 43.62597508507279, "lng": -70.30537634309235, "capacity": 380, "color": "#F39C12"},
-    "Kaler":   {"lat": 43.62867422728908, "lng": -70.26881539114758, "capacity": 240, "color": "#9B59B6"},
-}
+from src.config import (
+    SCENARIOS, RECONFIG_SCENARIOS, SCHOOLS,
+    PREK_COMMUNITY_CURRENT, PREK_PER_SCHOOL, PREK_PER_CENTER,
+    SCHOOL_COLORS, WALK_THRESHOLD_METERS,
+    TOTAL_K4, TOTAL_K1, TOTAL_G24,
+)
 
-os.makedirs('webapp/public/data', exist_ok=True)
+os.makedirs("webapp/public/data", exist_ok=True)
 
-# Load distance matrices
-with open('cache/distance_matrices.pkl', 'rb') as f:
+with open("cache/distance_matrices.pkl", "rb") as f:
     dm = pickle.load(f)
-walk_df = dm['walk']
-drive_df = dm['drive']
-
-# Convert index to string for consistent lookup
-walk_df.index = walk_df.index.astype(str)
+walk_df  = dm["walk"]
+drive_df = dm["drive"]
+walk_df.index  = walk_df.index.astype(str)
 drive_df.index = drive_df.index.astype(str)
 
-# Load block geometries (WGS84 - GeoJSON is always WGS84)
-blocks_gdf = gpd.read_file('Polygons.geojson')
-blocks_gdf = blocks_gdf.rename(columns={'GEOID20': 'block_id', 'POP20': 'population'})
-blocks_gdf['block_id'] = blocks_gdf['block_id'].astype(str)
-blocks_gdf = blocks_gdf.set_index('block_id')
+blocks_gdf = gpd.read_file("Polygons.geojson")
+blocks_gdf = blocks_gdf.rename(columns={"GEOID20": "block_id", "POP20": "population"})
+blocks_gdf["block_id"]  = blocks_gdf["block_id"].astype(str)
+blocks_gdf["population"] = pd.to_numeric(blocks_gdf["population"], errors="coerce").fillna(0).astype(int)
+blocks_gdf = blocks_gdf.set_index("block_id", drop=False)
+total_pop = blocks_gdf["population"].sum()
 
-# Load student estimates (same across scenarios - derived from total pop)
-ref_df = pd.read_csv('outputs/brown_closed_block_assignments.csv')
-ref_df['block_id'] = ref_df['block_id'].astype(str)
-students_map = dict(zip(ref_df['block_id'], ref_df['students']))
+CLOSED_MAP = {s["name"]: s["closed"] for s in SCENARIOS}
+
+SCHOOLS_OUT = {
+    k: {"lat": v["lat"], "lng": v["lng"], "capacity": v["capacity"],
+        "color": SCHOOL_COLORS[k]}
+    for k, v in SCHOOLS.items()
+}
 
 def safe_dist(df, bid, sid):
     try:
@@ -53,47 +45,75 @@ def safe_dist(df, bid, sid):
     except Exception:
         return None
 
-for scenario in SCENARIOS:
-    closed = CLOSED_MAP[scenario]
-    open_schools = [s for s in SCHOOLS if s != closed]
+def load_asgn(path):
+    df = pd.read_csv(path)
+    df["block_id"] = df["block_id"].astype(str)
+    return dict(zip(df["block_id"], df["assigned_school"]))
 
-    asgn_df = pd.read_csv(f'outputs/{scenario}_block_assignments.csv')
-    asgn_df['block_id'] = asgn_df['block_id'].astype(str)
-    base_assignments = dict(zip(asgn_df['block_id'], asgn_df['assigned_school']))
+for scenario in SCENARIOS:
+    sname  = scenario["name"]
+    closed = CLOSED_MAP[sname]
+    open_school_ids = [s for s in SCHOOLS if s != closed]
+    reconfig = RECONFIG_SCENARIOS[sname]
+    prek1_ids = reconfig["prek1_schools"]
+    g24_ids   = reconfig["g24_schools"]
+
+    # Load all 5 mode assignments
+    modes = {
+        "community_current": load_asgn(f"outputs/{sname}_community_current.csv"),
+        "community_full":    load_asgn(f"outputs/{sname}_community_full.csv"),
+        "prek1_current":     load_asgn(f"outputs/{sname}_prek1_current.csv"),
+        "prek1_full":        load_asgn(f"outputs/{sname}_prek1_full.csv"),
+        "g24":               load_asgn(f"outputs/{sname}_g24.csv"),
+    }
+
+    # PreK overhead per mode (for display / capacity calculations in the webapp)
+    prek_alloc = {
+        "community_current": PREK_COMMUNITY_CURRENT[sname],
+        "community_full":    {sid: PREK_PER_SCHOOL for sid in open_school_ids},
+        "prek1_current":     {sid: PREK_PER_SCHOOL for sid in prek1_ids},
+        "prek1_full":        {sid: PREK_PER_CENTER for sid in prek1_ids},
+        "g24":               {},
+    }
 
     blocks_out = []
     for bid, row in blocks_gdf.iterrows():
-        if bid not in base_assignments:
-            continue
-        pop = int(row['population'])
-        students = round(float(students_map.get(bid, 0)), 2)
+        pop      = int(row["population"])
+        stud_k4  = round(pop / total_pop * TOTAL_K4,  2)
+        stud_k1  = round(pop / total_pop * TOTAL_K1,  2)
+        stud_g24 = round(pop / total_pop * TOTAL_G24, 2)
 
-        walk_dists  = {sid: safe_dist(walk_df,  bid, sid) for sid in open_schools}
-        drive_dists = {sid: safe_dist(drive_df, bid, sid) for sid in open_schools}
+        walk_dists  = {sid: safe_dist(walk_df,  bid, sid) for sid in open_school_ids}
+        drive_dists = {sid: safe_dist(drive_df, bid, sid) for sid in open_school_ids}
+        geom = row["geometry"].__geo_interface__
 
-        geom = row['geometry'].__geo_interface__
+        base_assignments = {mode: asgn.get(bid) for mode, asgn in modes.items()}
 
         blocks_out.append({
-            'id':             bid,
-            'geometry':       geom,
-            'population':     pop,
-            'students':       students,
-            'baseAssignment': base_assignments[bid],
-            'walkDists':      walk_dists,
-            'driveDists':     drive_dists,
+            "id":               bid,
+            "geometry":         geom,
+            "population":       pop,
+            "studentsK4":       stud_k4,
+            "studentsK1":       stud_k1,
+            "studentsG24":      stud_g24,
+            "baseAssignments":  base_assignments,
+            "walkDists":        walk_dists,
+            "driveDists":       drive_dists,
         })
 
     out = {
-        'scenario':    scenario,
-        'closedSchool': closed,
-        'openSchools': open_schools,
-        'schools':     {s: SCHOOLS[s] for s in open_schools},
-        'blocks':      blocks_out,
+        "scenario":      sname,
+        "closedSchool":  closed,
+        "openSchools":   open_school_ids,
+        "schools":       {s: SCHOOLS_OUT[s] for s in open_school_ids},
+        "reconfig":      {"prek1Schools": prek1_ids, "g24Schools": g24_ids},
+        "prekAllocations": prek_alloc,
+        "blocks":        blocks_out,
     }
 
-    path = f'webapp/public/data/{scenario}.json'
-    with open(path, 'w') as f:
-        json.dump(out, f, separators=(',', ':'))
-    print(f'{scenario}: {len(blocks_out)} blocks, {os.path.getsize(path)/1024:.0f} KB')
+    path = f"webapp/public/data/{sname}.json"
+    with open(path, "w") as f:
+        json.dump(out, f, separators=(",", ":"))
+    print(f"{sname}: {len(blocks_out)} blocks, {os.path.getsize(path)/1024:.0f} KB")
 
-print('Done — data files in webapp/public/data/')
+print("Done.")

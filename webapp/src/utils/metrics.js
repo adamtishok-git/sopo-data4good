@@ -1,42 +1,59 @@
-const WALK_THRESHOLD = 1609.34; // 1 mile in meters
+const WALK_THRESHOLD = 1609.34;
 
-export function computeMetrics(blocks, assignments, openSchools, schools) {
+/**
+ * Compute per-school metrics for one mode.
+ *
+ * studentKey: "studentsK4" | "studentsK1" | "studentsG24"
+ * prekAllocations: {schoolId: prekCount} — pre-assigned overhead for this mode
+ */
+export function computeMetrics(blocks, assignments, openSchools, schools, studentKey, prekAllocations = {}) {
   const metrics = {};
 
   for (const sid of openSchools) {
     const zoneBlocks = blocks.filter(b => assignments[b.id] === sid);
-
-    const assignedStudents = zoneBlocks.reduce((s, b) => s + b.students, 0);
+    const zoneStudents = zoneBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
+    const prekCount    = prekAllocations[sid] || 0;
+    const totalEnrolled = zoneStudents + prekCount;
     const capacity = schools[sid].capacity;
+    const effectiveCap = Math.max(0, capacity - prekCount);
 
     const walkableBlocks    = zoneBlocks.filter(b => b.walkDists[sid] !== null && b.walkDists[sid] <= WALK_THRESHOLD);
     const nonWalkableBlocks = zoneBlocks.filter(b => b.walkDists[sid] === null  || b.walkDists[sid] >  WALK_THRESHOLD);
 
-    const walkableStudents = walkableBlocks.reduce((s, b) => s + b.students, 0);
-    const pctWalkable = assignedStudents > 0 ? (walkableStudents / assignedStudents) * 100 : 0;
+    const walkableStudents = walkableBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
+    const pctWithin1Mile   = zoneStudents > 0 ? (walkableStudents / zoneStudents) * 100 : 0;
 
     // Population-weighted avg drive for non-walkable blocks
-    let avgDriveNonWalkableMi = null;
-    const totalNwPop = nonWalkableBlocks.reduce((s, b) => s + b.population, 0);
-    if (totalNwPop > 0) {
+    let avgDriveNonWalkMi = null;
+    const nwPop = nonWalkableBlocks.reduce((s, b) => s + b.population, 0);
+    if (nwPop > 0) {
       const weighted = nonWalkableBlocks.reduce((s, b) => {
         const dd = b.driveDists[sid];
         return dd !== null ? s + dd * b.population : s;
       }, 0);
-      avgDriveNonWalkableMi = weighted / totalNwPop / 1609.34;
+      avgDriveNonWalkMi = weighted / nwPop / 1609.34;
+    }
+
+    // Max drive distance across all zone blocks
+    let maxDriveMi = null;
+    for (const b of zoneBlocks) {
+      const dd = b.driveDists[sid];
+      if (dd !== null && (maxDriveMi === null || dd > maxDriveMi * 1609.34))
+        maxDriveMi = dd / 1609.34;
     }
 
     metrics[sid] = {
-      assignedStudents: Math.round(assignedStudents * 10) / 10,
+      zoneStudents:        Math.round(zoneStudents * 10) / 10,
+      prekCount,
+      totalEnrolled:       Math.round(totalEnrolled * 10) / 10,
       capacity,
-      utilization: capacity > 0 ? assignedStudents / capacity : 0,
-      pctWalkable: Math.round(pctWalkable * 10) / 10,
-      avgDriveNonWalkableMi: avgDriveNonWalkableMi !== null
-        ? Math.round(avgDriveNonWalkableMi * 100) / 100
-        : null,
-      overCapacity: assignedStudents > capacity,
+      effectiveCap,
+      utilization:         capacity > 0 ? totalEnrolled / capacity : 0,
+      overCapacity:        totalEnrolled > capacity,
+      pctWithin1Mile:      Math.round(pctWithin1Mile * 10) / 10,
+      avgDriveNonWalkMi:   avgDriveNonWalkMi !== null ? Math.round(avgDriveNonWalkMi * 100) / 100 : null,
+      maxDriveMi:          maxDriveMi !== null ? Math.round(maxDriveMi * 100) / 100 : null,
     };
   }
-
   return metrics;
 }
