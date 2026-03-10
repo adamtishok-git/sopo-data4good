@@ -36,10 +36,19 @@ def load_blocks() -> gpd.GeoDataFrame:
         lambda r: Point(r["centroid_lon"], r["centroid_lat"]), axis=1
     )
 
-    total_pop = gdf["population"].sum()
-    gdf["students"]     = (gdf["population"] / total_pop * TOTAL_K4 ).round(2)
-    gdf["students_k1"]  = (gdf["population"] / total_pop * TOTAL_K1 ).round(2)
-    gdf["students_g24"] = (gdf["population"] / total_pop * TOTAL_G24).round(2)
+    # Blocks assumed to have no school-age children (pending real enrollment data).
+    # TODO: revisit with actual per-student address data from the school district.
+    NO_STUDENTS_BLOCKS = {"030022012"}  # Retirement community
+
+    # Compute student proportions using only eligible residential population
+    eligible_pop = gdf.loc[~gdf["block_id"].isin(NO_STUDENTS_BLOCKS), "population"].sum()
+    gdf["students"]     = (gdf["population"] / eligible_pop * TOTAL_K4 ).round(2)
+    gdf["students_k1"]  = (gdf["population"] / eligible_pop * TOTAL_K1 ).round(2)
+    gdf["students_g24"] = (gdf["population"] / eligible_pop * TOTAL_G24).round(2)
+
+    # Zero out excluded blocks
+    gdf.loc[gdf["block_id"].isin(NO_STUDENTS_BLOCKS),
+            ["students", "students_k1", "students_g24"]] = 0.0
 
     gdf = gdf.set_crs("EPSG:4326", allow_override=True)
     gdf["geometry_4326"] = gdf["geometry"]
