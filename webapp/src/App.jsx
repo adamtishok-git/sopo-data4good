@@ -178,6 +178,14 @@ export default function App() {
       </div>
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+
+      <footer className="disclaimer">
+        <strong>Unofficial tool.</strong> Zone assignments shown here are computer-generated
+        estimates based on straight-line and road distances from school addresses — they are
+        not official school district boundaries and should not be treated as such.
+        This site was created independently by a South Portland parent and has no affiliation
+        with South Portland School Department or the School Board.
+      </footer>
     </div>
   );
 }
