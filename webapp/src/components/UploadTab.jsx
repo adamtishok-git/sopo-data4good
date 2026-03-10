@@ -202,8 +202,8 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
                   {m.prekCount > 0 && <span className="prek-note"> (incl. {m.prekCount} PreK)</span>}
                 </div>
                 <div className="school-stat">
-                  {m.pctWithin1Mile.toFixed(0)}% walkable
-                  <span className="stat-muted"> · {m.walkableStudents.toFixed(0)} students within 1 mi</span>
+                  {m.pctWalkable.toFixed(0)}% walkable
+                  <span className="stat-muted"> · {m.pctWithin1Mile.toFixed(0)}% within 1 mi</span>
                 </div>
                 <div className="school-stat">
                   {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}
