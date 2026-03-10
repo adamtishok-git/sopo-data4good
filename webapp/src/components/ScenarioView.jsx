@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import html2canvas from 'html2canvas'
 import MapView    from './MapView'
 import StatsPanel from './StatsPanel'
 import { downloadGeoJSON } from '../utils/download.js'
@@ -10,6 +11,7 @@ export default function ScenarioView({
   onReassign, onReset,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
+  const viewRef = useRef(null);
 
   const state = states[modeKey];
 
@@ -20,6 +22,17 @@ export default function ScenarioView({
   function handleReset() {
     setSelectedBlock(null);
     onReset(modeKey);
+  }
+
+  function handleExportPNG() {
+    if (!viewRef.current) return;
+    const scenario = scenarioData.scenario || 'zones';
+    html2canvas(viewRef.current, { useCORS: true, scale: 2 }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `${scenario}_${modeKey}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
   }
 
   function handleDownload() {
@@ -55,7 +68,7 @@ export default function ScenarioView({
   }
 
   return (
-    <div className={`scenario-view${active ? '' : ' hidden'}`}>
+    <div ref={viewRef} className={`scenario-view${active ? '' : ' hidden'}`}>
       <div className="map-container">
         {active && (
           <MapView
@@ -92,6 +105,7 @@ export default function ScenarioView({
           onReassign={handleReassign}
           onReset={handleReset}
           onDownload={handleDownload}
+          onExportPNG={handleExportPNG}
           modeKey={modeKey}
           studentKey={studentKey}
           visibleSchools={visibleSchools}

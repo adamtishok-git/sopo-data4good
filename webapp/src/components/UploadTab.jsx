@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
+import html2canvas from 'html2canvas'
 import { computeMetrics } from '../utils/metrics.js'
 
 const WALK_THRESHOLD = 1609.34;
@@ -140,17 +141,12 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 
-function fmtMi(m) {
-  return m !== null && m !== undefined ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
-}
-
-function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear }) {
+function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear, onExportPNG }) {
   const { schools, prekAllocations, metadata, modeOption, modeKey } = parsed;
   const metrics = computeMetrics(parsed.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations);
 
   const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
-  const walkDist  = selectedBlock && assignedSchool ? (selectedBlock.walkDists[assignedSchool]  ?? null) : null;
-  const driveDist = selectedBlock && assignedSchool ? (selectedBlock.driveDists[assignedSchool] ?? null) : null;
+  const walkDist     = selectedBlock && assignedSchool ? (selectedBlock.walkDists[assignedSchool] ?? null) : null;
   const isWalkable   = walkDist !== null && walkDist <= WALK_THRESHOLD;
   const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
 
@@ -221,13 +217,14 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
           <div className="block-stat-row">Block: <span title={selectedBlock.id}>{selectedBlock.id.slice(-9)}</span></div>
           <div className="block-stat-row">Population: <span>{selectedBlock.population}</span></div>
           <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
-          {assignedSchool && <>
+          {assignedSchool && (
             <div className="block-stat-row">
-              Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span>
-              {' '}{isWalkable ? '(walkable)' : '(bussed)'}
+              To {assignedSchool}:{' '}
+              <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
+                {isWalkable ? 'Walkable' : 'Bussed'}
+              </span>
             </div>
-            <div className="block-stat-row">Drive to {assignedSchool}: <span>{fmtMi(driveDist)}</span></div>
-          </>}
+          )}
           <div className="reassign-label">Assign to:</div>
           <select
             className="reassign-select"
@@ -244,6 +241,7 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
       )}
 
       <div className="sidebar-actions">
+        <button className="btn btn-secondary" onClick={onExportPNG}>Export PNG</button>
         <button className="btn btn-secondary" onClick={onClear}>Clear Upload</button>
       </div>
     </>
@@ -261,6 +259,18 @@ export default function UploadTab({ active }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [dragOver,      setDragOver]      = useState(false);
   const [error,         setError]         = useState(null);
+  const viewRef = useRef(null);
+
+  function handleExportPNG() {
+    if (!viewRef.current) return;
+    const label = parsed?.metadata?.scenario || 'uploaded';
+    html2canvas(viewRef.current, { useCORS: true, scale: 2 }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `${label}_zones.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  }
 
   function handleFile(file) {
     setError(null);
@@ -359,7 +369,7 @@ export default function UploadTab({ active }) {
     : parsed.studentKey;
 
   return (
-    <div className="scenario-view">
+    <div ref={viewRef} className="scenario-view">
       <div className="map-container">
         <UploadMap
           parsed={parsed}
@@ -391,6 +401,7 @@ export default function UploadTab({ active }) {
           selectedBlock={selectedBlock}
           onReassign={handleReassign}
           onClear={handleClear}
+          onExportPNG={handleExportPNG}
         />
       </div>
     </div>

@@ -2,7 +2,7 @@ import { computeMetrics } from '../utils/metrics.js'
 
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
-  selectedBlock, onReassign, onReset, onDownload,
+  selectedBlock, onReassign, onReset, onDownload, onExportPNG,
   modeKey, studentKey, visibleSchools,
 }) {
   const { schools } = scenarioData;
@@ -13,15 +13,10 @@ export default function StatsPanel({
   const hasEdits = editedBlocks.size > 0;
 
   const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
-  const walkDist  = selectedBlock && assignedSchool ? selectedBlock.walkDists[assignedSchool]  : null;
-  const driveDist = selectedBlock && assignedSchool ? selectedBlock.driveDists[assignedSchool] : null;
+  const walkDist     = selectedBlock && assignedSchool ? selectedBlock.walkDists[assignedSchool] : null;
   const isWalkable   = walkDist !== null && walkDist <= 1609.34;
   const isEdited     = selectedBlock ? editedBlocks.has(selectedBlock.id) : false;
   const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
-
-  function fmtMi(m) {
-    return m !== null && m !== undefined ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
-  }
 
   return (
     <>
@@ -71,13 +66,14 @@ export default function StatsPanel({
           <div className="block-stat-row">Block: <span title={selectedBlock.id}>{selectedBlock.id.slice(-9)}</span></div>
           <div className="block-stat-row">Population: <span>{selectedBlock.population}</span></div>
           <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
-          {assignedSchool && <>
+          {assignedSchool && (
             <div className="block-stat-row">
-              Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span>
-              {' '}{isWalkable ? '(walkable)' : '(bussed)'}
+              To {assignedSchool}:{' '}
+              <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
+                {isWalkable ? 'Walkable' : 'Bussed'}
+              </span>
             </div>
-            <div className="block-stat-row">Drive to {assignedSchool}: <span>{fmtMi(driveDist)}</span></div>
-          </>}
+          )}
           <div className="reassign-label">Assign to:</div>
           <select
             className="reassign-select"
@@ -95,6 +91,7 @@ export default function StatsPanel({
 
       <div className="sidebar-actions">
         <button className="btn btn-primary" onClick={onDownload}>Download GeoJSON</button>
+        <button className="btn btn-secondary" onClick={onExportPNG}>Export PNG</button>
         <button className="btn btn-secondary" onClick={onReset}
           disabled={!hasEdits} style={{ opacity: hasEdits ? 1 : 0.45 }}>
           Reset to Base
