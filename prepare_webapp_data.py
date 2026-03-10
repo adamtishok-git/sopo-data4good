@@ -23,12 +23,18 @@ drive_df = dm["drive"]
 walk_df.index  = walk_df.index.astype(str)
 drive_df.index = drive_df.index.astype(str)
 
+# Blocks with no school-age children — excluded from map and student counts.
+# TODO: revisit with actual per-student address data from the school district.
+NO_STUDENTS_BLOCKS = {"230050030022012"}  # Retirement community
+
 blocks_gdf = gpd.read_file("Polygons.geojson")
 blocks_gdf = blocks_gdf.rename(columns={"GEOID20": "block_id", "POP20": "population"})
 blocks_gdf["block_id"]  = blocks_gdf["block_id"].astype(str)
 blocks_gdf["population"] = pd.to_numeric(blocks_gdf["population"], errors="coerce").fillna(0).astype(int)
 blocks_gdf = blocks_gdf.set_index("block_id", drop=False)
-total_pop = blocks_gdf["population"].sum()
+
+# Use only eligible (non-excluded) population so students redistribute correctly
+eligible_pop = blocks_gdf.loc[~blocks_gdf["block_id"].isin(NO_STUDENTS_BLOCKS), "population"].sum()
 
 CLOSED_MAP = {s["name"]: s["closed"] for s in SCENARIOS}
 
@@ -78,10 +84,14 @@ for scenario in SCENARIOS:
 
     blocks_out = []
     for bid, row in blocks_gdf.iterrows():
+        # Skip excluded blocks entirely — they won't appear on the map
+        if bid in NO_STUDENTS_BLOCKS:
+            continue
+
         pop      = int(row["population"])
-        stud_k4  = round(pop / total_pop * TOTAL_K4,  2)
-        stud_k1  = round(pop / total_pop * TOTAL_K1,  2)
-        stud_g24 = round(pop / total_pop * TOTAL_G24, 2)
+        stud_k4  = round(pop / eligible_pop * TOTAL_K4,  2)
+        stud_k1  = round(pop / eligible_pop * TOTAL_K1,  2)
+        stud_g24 = round(pop / eligible_pop * TOTAL_G24, 2)
 
         walk_dists  = {sid: safe_dist(walk_df,  bid, sid) for sid in open_school_ids}
         drive_dists = {sid: safe_dist(drive_df, bid, sid) for sid in open_school_ids}
