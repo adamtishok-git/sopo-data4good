@@ -38,7 +38,7 @@ def load_blocks() -> gpd.GeoDataFrame:
 
     # Blocks assumed to have no school-age children (pending real enrollment data).
     # TODO: revisit with actual per-student address data from the school district.
-    NO_STUDENTS_BLOCKS = {"030022012"}  # Retirement community
+    NO_STUDENTS_BLOCKS = {"230050030022012"}  # Retirement community
 
     # Compute student proportions using only eligible residential population
     eligible_pop = gdf.loc[~gdf["block_id"].isin(NO_STUDENTS_BLOCKS), "population"].sum()
