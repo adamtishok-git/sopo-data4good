@@ -10,11 +10,42 @@ const SCENARIO_LABELS = {
   small_closed: 'Close Small',
   kaler_closed: 'Close Kaler',
 };
-const MODE_KEYS = ['community_current', 'community_full', 'prek1_current', 'prek1_full', 'g24'];
+
+const MODE_OPTIONS = [
+  { key: 'community_current', label: 'Community – Current PreK' },
+  { key: 'community_full',    label: 'Community – Full PreK'    },
+  { key: 'prek1_current',     label: 'Grade Centers – Current PreK' },
+  { key: 'prek1_full',        label: 'Grade Centers – Full PreK'    },
+];
+
+const ALL_MODE_KEYS = ['community_current', 'community_full', 'prek1_current', 'prek1_full', 'g24'];
+
+function isGradeCenter(modeOption) {
+  return modeOption.startsWith('prek1');
+}
+
+/** Resolve the actual data modeKey from the dropdown + grade-band sub-tab. */
+function resolveModeKey(modeOption, gradeLevel) {
+  if (!isGradeCenter(modeOption)) return modeOption;          // community_*
+  if (gradeLevel === 'g24') return 'g24';                     // 2–4 band
+  return modeOption;                                           // prek1_current / prek1_full
+}
+
+function getStudentKey(modeKey) {
+  if (modeKey.startsWith('prek1')) return 'studentsK1';
+  if (modeKey === 'g24')           return 'studentsG24';
+  return 'studentsK4';
+}
+
+function getVisibleSchools(modeKey, scenarioData) {
+  if (modeKey.startsWith('prek1')) return scenarioData.reconfig.prek1Schools;
+  if (modeKey === 'g24')           return scenarioData.reconfig.g24Schools;
+  return scenarioData.openSchools;
+}
 
 function initScenarioStates(data) {
   const states = {};
-  for (const modeKey of MODE_KEYS) {
+  for (const modeKey of ALL_MODE_KEYS) {
     const assignments = {};
     data.blocks.forEach(b => { assignments[b.id] = b.baseAssignments[modeKey]; });
     states[modeKey] = { assignments, editedBlocks: new Set() };
@@ -24,6 +55,8 @@ function initScenarioStates(data) {
 
 export default function App() {
   const [activeTab,      setActiveTab]      = useState('brown_closed');
+  const [modeOption,     setModeOption]     = useState('community_current');
+  const [gradeLevel,     setGradeLevel]     = useState('prek1');   // 'prek1' | 'g24'
   const [showAbout,      setShowAbout]      = useState(false);
   const [scenarioData,   setScenarioData]   = useState(null);
   const [scenarioStates, setScenarioStates] = useState(null);
@@ -84,27 +117,58 @@ export default function App() {
     );
   }
 
+  const gcMode  = isGradeCenter(modeOption);
+  const modeKey = resolveModeKey(modeOption, gradeLevel);
+  const studentKey = getStudentKey(modeKey);
+
   return (
     <div className="app">
       <header className="header">
         <h1>South Portland Elementary School Redistricting</h1>
         <div className="header-right">
+          <select
+            className="mode-select"
+            value={modeOption}
+            onChange={e => {
+              setModeOption(e.target.value);
+              setGradeLevel('prek1'); // reset to prek1 band when switching modes
+            }}
+          >
+            {MODE_OPTIONS.map(o => (
+              <option key={o.key} value={o.key}>{o.label}</option>
+            ))}
+          </select>
           <button className="btn-about" onClick={() => setShowAbout(true)}>About</button>
         </div>
       </header>
 
       <div className="tabs">
         {SCENARIO_KEYS.map(key => {
-          const hasEdits = Object.values(scenarioStates[key]).some(s => s.editedBlocks.size > 0);
+          const isActive = activeTab === key;
+          const hasEdits = scenarioStates[key][modeKey].editedBlocks.size > 0;
           return (
-            <button
-              key={key}
-              className={`tab${activeTab === key ? ' active' : ''}`}
-              onClick={() => setActiveTab(key)}
-            >
-              {SCENARIO_LABELS[key]}
-              {hasEdits && <span className="tab-dot" title="Has unsaved edits" />}
-            </button>
+            <div key={key} className={`tab-group${isActive ? ' active' : ''}`}>
+              <button
+                className={`tab${isActive ? ' active' : ''}`}
+                onClick={() => setActiveTab(key)}
+              >
+                {SCENARIO_LABELS[key]}
+                {hasEdits && <span className="tab-dot" title="Has unsaved edits" />}
+              </button>
+              {/* Grade-band sub-tabs — only on the active tab in grade center mode */}
+              {isActive && gcMode && (
+                <div className="grade-subtabs">
+                  <button
+                    className={`grade-subtab${gradeLevel === 'prek1' ? ' active' : ''}`}
+                    onClick={() => setGradeLevel('prek1')}
+                  >PreK–1</button>
+                  <button
+                    className={`grade-subtab${gradeLevel === 'g24' ? ' active' : ''}`}
+                    onClick={() => setGradeLevel('g24')}
+                  >2–4</button>
+                </div>
+              )}
+            </div>
           );
         })}
         <button
@@ -122,8 +186,11 @@ export default function App() {
             scenarioData={scenarioData[key]}
             states={scenarioStates[key]}
             active={activeTab === key}
-            onReassign={(modeKey, blockId, school) => reassignBlock(key, modeKey, blockId, school)}
-            onReset={(modeKey) => resetMode(key, modeKey)}
+            modeKey={modeKey}
+            studentKey={studentKey}
+            visibleSchools={getVisibleSchools(modeKey, scenarioData[key])}
+            onReassign={(mk, blockId, school) => reassignBlock(key, mk, blockId, school)}
+            onReset={(mk) => resetMode(key, mk)}
           />
         ))}
         <UploadTab active={activeTab === 'upload'} />
