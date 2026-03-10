@@ -64,6 +64,8 @@ def _run_3stage(blocks_gdf, open_schools, walk_df, drive_df, adjacency, label):
     asgn = balance_capacity(asgn, blocks_gdf, open_schools, drive_df, adjacency)
     print(f"    [{label}] Stage 3...")
     asgn = smooth_bussed_communities(asgn, blocks_gdf, open_schools, walk_df, drive_df, adjacency)
+    print(f"    [{label}] Stage 2b (re-balance after smoothing)...")
+    asgn = balance_capacity(asgn, blocks_gdf, open_schools, drive_df, adjacency)
     for sid in open_schools["school_id"]:
         load = sum(blocks_gdf.loc[b, "students"] for b, s in asgn.items() if s == sid)
         cap  = open_schools.loc[sid, "capacity"]

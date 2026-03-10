@@ -237,14 +237,29 @@ def balance_capacity(assignments, blocks_gdf, open_schools, drive_df, adjacency,
             for block_id in zone_blocks:
                 if _students_in_zone(school_id, assignments, blocks_gdf) <= capacities[school_id]:
                     break
-                if not removal_preserves_contiguity(block_id, school_id, assignments, adjacency):
-                    continue
 
                 under_cap_alts = sorted(
                     [s for s in open_school_ids if s != school_id and loads[s] < capacities[s]],
                     key=lambda s: drive_df.loc[block_id, s],
                 )
                 if not under_cap_alts:
+                    continue
+
+                if not removal_preserves_contiguity(block_id, school_id, assignments, adjacency):
+                    # Tier 4: bridge block — try moving it + its isolated peninsula as a group
+                    fragment = _isolated_fragment(block_id, school_id, assignments, adjacency)
+                    if fragment is None:
+                        continue
+                    group = {block_id} | set(fragment)
+                    group_students = sum(blocks_gdf.loc[b, "students"] for b in group)
+                    for alt in under_cap_alts:
+                        if loads[alt] + group_students <= capacities[alt]:
+                            for b in group:
+                                assignments[b] = alt
+                            loads[alt] += group_students
+                            loads[school_id] -= group_students
+                            changed = True
+                            break
                     continue
 
                 # Classify alternatives by community-continuity quality
