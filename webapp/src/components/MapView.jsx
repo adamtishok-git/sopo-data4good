@@ -19,18 +19,19 @@ export default function MapView({
   scenarioData, assignments, editedBlocks,
   selectedBlockId, onBlockClick, visibleSchools, studentKey,
 }) {
-  const mapElRef   = useRef(null);
-  const mapRef     = useRef(null);
-  const layersRef  = useRef({});
-  const clickCbRef = useRef(onBlockClick);
-  const asgnRef    = useRef(assignments);
-  const studKeyRef = useRef(studentKey);
+  const mapElRef        = useRef(null);
+  const mapRef          = useRef(null);
+  const layersRef       = useRef({});
+  const schoolLayersRef = useRef([]);   // circles + markers, rebuilt on visibleSchools change
+  const clickCbRef      = useRef(onBlockClick);
+  const asgnRef         = useRef(assignments);
+  const studKeyRef      = useRef(studentKey);
 
   useEffect(() => { clickCbRef.current = onBlockClick; });
   useEffect(() => { asgnRef.current    = assignments;  });
   useEffect(() => { studKeyRef.current = studentKey;   });
 
-  // Initialize map once on mount
+  // ── Initialize map and block polygons once ──────────────────────────────
   useEffect(() => {
     const { schools, blocks } = scenarioData;
 
@@ -68,22 +69,33 @@ export default function MapView({
       layersRef.current[block.id] = layer;
     });
 
-    // School markers + walk circles
+    return () => { map.remove(); mapRef.current = null; layersRef.current = {}; schoolLayersRef.current = []; };
+  }, []); // eslint-disable-line
+
+  // ── School markers + walk circles — rebuilt whenever visibleSchools changes ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const { schools } = scenarioData;
+
+    // Remove previous school layers
+    schoolLayersRef.current.forEach(l => l.remove());
+    schoolLayersRef.current = [];
+
     visibleSchools.forEach(sid => {
       const s = schools[sid];
       if (!s) return;
-      L.circle([s.lat, s.lng], {
+      const circle = L.circle([s.lat, s.lng], {
         radius: WALK_RADIUS, color: s.color, weight: 1.5, dashArray: '6', fill: false,
       }).addTo(map);
-      L.circleMarker([s.lat, s.lng], {
+      const marker = L.circleMarker([s.lat, s.lng], {
         radius: 9, color: '#fff', weight: 2, fillColor: s.color, fillOpacity: 1,
       }).bindTooltip(sid, { permanent: false }).addTo(map);
+      schoolLayersRef.current.push(circle, marker);
     });
+  }, [visibleSchools]); // eslint-disable-line
 
-    return () => { map.remove(); mapRef.current = null; layersRef.current = {}; };
-  }, []); // eslint-disable-line
-
-  // Update polygon styles when assignments / selection change
+  // ── Update block styles when assignments / selection change ─────────────
   useEffect(() => {
     const { schools } = scenarioData;
     scenarioData.blocks.forEach(block => {
