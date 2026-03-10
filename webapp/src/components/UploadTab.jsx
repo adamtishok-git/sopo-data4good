@@ -95,13 +95,13 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
 
       layer.on('click', () => cbRef.current(block));
       layer.on('mouseover', e => {
-        const curSid = asgnRef.current[block.id];
-        const wd  = curSid ? (block.walkDists[curSid]  ?? null) : null;
-        const dd  = curSid ? (block.driveDists[curSid] ?? null) : null;
-        const fmt = m => m !== null ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
+        const curSid  = asgnRef.current[block.id];
+        const wd      = curSid ? (block.walkDists[curSid] ?? null) : null;
+        const walkable = wd !== null && wd <= WALK_THRESHOLD;
+        const status  = curSid ? (walkable ? 'Walkable' : 'Bussed') : '—';
         layer.bindTooltip(
           `<b>${block.id}</b><br>Pop: ${block.population}<br>` +
-          `Assigned: ${curSid || '—'}<br>Walk: ${fmt(wd)} · Drive: ${fmt(dd)}`,
+          `Assigned: ${curSid || '—'} · ${status}`,
           { sticky: true }
         ).openTooltip(e.latlng);
       });

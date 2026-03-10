@@ -51,15 +51,14 @@ export default function MapView({
       layer.on('mouseover', e => {
         const curSid = asgnRef.current[block.id];
         const sk     = studKeyRef.current;
-        const wd  = curSid ? block.walkDists[curSid]  : null;
-        const dd  = curSid ? block.driveDists[curSid] : null;
-        const fmt = m => m !== null ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
+        const wd     = curSid ? block.walkDists[curSid] : null;
+        const walkable = wd !== null && wd <= 1609.34;
+        const status = curSid ? (walkable ? 'Walkable' : 'Bussed') : '—';
         const stud = (block[sk] || 0).toFixed(1);
         layer.bindTooltip(
           `<b>${block.id}</b><br>` +
           `Pop: ${block.population} · Students: ${stud}<br>` +
-          `Assigned: ${curSid || '—'}<br>` +
-          `Walk: ${fmt(wd)} · Drive: ${fmt(dd)}`,
+          `Assigned: ${curSid || '—'} · ${status}`,
           { sticky: true }
         ).openTooltip(e.latlng);
       });
