@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import MapView    from './MapView'
 import StatsPanel from './StatsPanel'
+import { downloadGeoJSON } from '../utils/download.js'
 
 export default function ScenarioView({
   scenarioData, states, active,
-  modeKey, studentKey, visibleSchools,
+  modeKey, modeOption, studentKey, visibleSchools,
+  gcMode, gradeLevel, onGradeLevelChange,
   onReassign, onReset,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
@@ -18,6 +20,38 @@ export default function ScenarioView({
   function handleReset() {
     setSelectedBlock(null);
     onReset(modeKey);
+  }
+
+  function handleDownload() {
+    const prekAllocations = scenarioData.prekAllocations[modeKey] || {};
+    if (gcMode) {
+      const prek1State = states[modeOption] || { assignments: {}, editedBlocks: new Set() };
+      const g24State   = states['g24']      || { assignments: {}, editedBlocks: new Set() };
+      downloadGeoJSON({
+        scenarioData,
+        isGradeCenter:     true,
+        modeOption,
+        modeKey,
+        studentKey,
+        prekAllocations,
+        assignments:       state.assignments,
+        editedBlocks:      state.editedBlocks,
+        prek1Assignments:  prek1State.assignments,
+        g24Assignments:    g24State.assignments,
+        prek1EditedBlocks: prek1State.editedBlocks,
+        g24EditedBlocks:   g24State.editedBlocks,
+      });
+    } else {
+      downloadGeoJSON({
+        scenarioData,
+        isGradeCenter: false,
+        modeKey,
+        studentKey,
+        prekAllocations,
+        assignments:   state.assignments,
+        editedBlocks:  state.editedBlocks,
+      });
+    }
   }
 
   return (
@@ -34,6 +68,19 @@ export default function ScenarioView({
             studentKey={studentKey}
           />
         )}
+        {/* Grade-band overlay — floats over map, only in grade-center mode */}
+        {gcMode && (
+          <div className="grade-band-overlay">
+            <button
+              className={`band-btn${gradeLevel === 'prek1' ? ' active' : ''}`}
+              onClick={() => { onGradeLevelChange('prek1'); setSelectedBlock(null); }}
+            >PreK–1</button>
+            <button
+              className={`band-btn${gradeLevel === 'g24' ? ' active' : ''}`}
+              onClick={() => { onGradeLevelChange('g24'); setSelectedBlock(null); }}
+            >2–4</button>
+          </div>
+        )}
       </div>
 
       <div className="sidebar">
@@ -44,6 +91,7 @@ export default function ScenarioView({
           selectedBlock={selectedBlock}
           onReassign={handleReassign}
           onReset={handleReset}
+          onDownload={handleDownload}
           modeKey={modeKey}
           studentKey={studentKey}
           visibleSchools={visibleSchools}

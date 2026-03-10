@@ -4,7 +4,7 @@ const WALK_THRESHOLD = 1609.34;
  * Compute per-school metrics for one mode.
  *
  * studentKey: "studentsK4" | "studentsK1" | "studentsG24"
- * prekAllocations: {schoolId: prekCount} — pre-assigned overhead for this mode
+ * prekAllocations: {schoolId: prekCount}
  */
 export function computeMetrics(blocks, assignments, openSchools, schools, studentKey, prekAllocations = {}) {
   const metrics = {};
@@ -15,13 +15,13 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
     const prekCount    = prekAllocations[sid] || 0;
     const totalEnrolled = zoneStudents + prekCount;
     const capacity = schools[sid].capacity;
-    const effectiveCap = Math.max(0, capacity - prekCount);
 
     const walkableBlocks    = zoneBlocks.filter(b => b.walkDists[sid] !== null && b.walkDists[sid] <= WALK_THRESHOLD);
     const nonWalkableBlocks = zoneBlocks.filter(b => b.walkDists[sid] === null  || b.walkDists[sid] >  WALK_THRESHOLD);
 
-    const walkableStudents = walkableBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
-    const pctWithin1Mile   = zoneStudents > 0 ? (walkableStudents / zoneStudents) * 100 : 0;
+    const walkableStudents    = walkableBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
+    const nonWalkableStudents = nonWalkableBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
+    const pctWithin1Mile      = zoneStudents > 0 ? (walkableStudents / zoneStudents) * 100 : 0;
 
     // Population-weighted avg drive for non-walkable blocks
     let avgDriveNonWalkMi = null;
@@ -43,16 +43,17 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
     }
 
     metrics[sid] = {
-      zoneStudents:        Math.round(zoneStudents * 10) / 10,
+      zoneStudents:         Math.round(zoneStudents * 10) / 10,
+      walkableStudents:     Math.round(walkableStudents * 10) / 10,
+      nonWalkableStudents:  Math.round(nonWalkableStudents * 10) / 10,
       prekCount,
-      totalEnrolled:       Math.round(totalEnrolled * 10) / 10,
+      totalEnrolled:        Math.round(totalEnrolled * 10) / 10,
       capacity,
-      effectiveCap,
-      utilization:         capacity > 0 ? totalEnrolled / capacity : 0,
-      overCapacity:        totalEnrolled > capacity,
-      pctWithin1Mile:      Math.round(pctWithin1Mile * 10) / 10,
-      avgDriveNonWalkMi:   avgDriveNonWalkMi !== null ? Math.round(avgDriveNonWalkMi * 100) / 100 : null,
-      maxDriveMi:          maxDriveMi !== null ? Math.round(maxDriveMi * 100) / 100 : null,
+      utilization:          capacity > 0 ? totalEnrolled / capacity : 0,
+      overCapacity:         totalEnrolled > capacity,
+      pctWithin1Mile:       Math.round(pctWithin1Mile * 10) / 10,
+      avgDriveNonWalkMi:    avgDriveNonWalkMi !== null ? Math.round(avgDriveNonWalkMi * 100) / 100 : null,
+      maxDriveMi:           maxDriveMi !== null ? Math.round(maxDriveMi * 100) / 100 : null,
     };
   }
   return metrics;

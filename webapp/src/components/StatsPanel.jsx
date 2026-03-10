@@ -1,12 +1,11 @@
 import { computeMetrics } from '../utils/metrics.js'
-import { downloadGeoJSON } from '../utils/download.js'
 
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
-  selectedBlock, onReassign, onReset,
+  selectedBlock, onReassign, onReset, onDownload,
   modeKey, studentKey, visibleSchools,
 }) {
-  const { schools, scenario, openSchools } = scenarioData;
+  const { schools } = scenarioData;
   const prekAllocations = scenarioData.prekAllocations[modeKey] || {};
   const metrics = computeMetrics(
     scenarioData.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations
@@ -16,8 +15,8 @@ export default function StatsPanel({
   const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
   const walkDist  = selectedBlock && assignedSchool ? selectedBlock.walkDists[assignedSchool]  : null;
   const driveDist = selectedBlock && assignedSchool ? selectedBlock.driveDists[assignedSchool] : null;
-  const isWalkable = walkDist !== null && walkDist <= 1609.34;
-  const isEdited   = selectedBlock ? editedBlocks.has(selectedBlock.id) : false;
+  const isWalkable   = walkDist !== null && walkDist <= 1609.34;
+  const isEdited     = selectedBlock ? editedBlocks.has(selectedBlock.id) : false;
   const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
 
   function fmtMi(m) {
@@ -50,10 +49,11 @@ export default function StatsPanel({
                   {m.prekCount > 0 && <span className="prek-note"> (incl. {m.prekCount} PreK)</span>}
                 </div>
                 <div className="school-stat">
-                  📍 {m.pctWithin1Mile.toFixed(0)}% within 1 mi
+                  {m.pctWithin1Mile.toFixed(0)}% walkable
+                  <span className="stat-muted"> · {m.walkableStudents.toFixed(0)} students within 1 mi</span>
                 </div>
                 <div className="school-stat">
-                  🚗 {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg' : '—'}
+                  {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}
                   {m.maxDriveMi !== null && <span className="stat-muted"> · max {m.maxDriveMi.toFixed(2)} mi</span>}
                 </div>
               </div>
@@ -73,7 +73,8 @@ export default function StatsPanel({
           <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
           {assignedSchool && <>
             <div className="block-stat-row">
-              Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span> {isWalkable ? '🚶' : '🚗'}
+              Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span>
+              {' '}{isWalkable ? '(walkable)' : '(bussed)'}
             </div>
             <div className="block-stat-row">Drive to {assignedSchool}: <span>{fmtMi(driveDist)}</span></div>
           </>}
@@ -93,12 +94,10 @@ export default function StatsPanel({
       )}
 
       <div className="sidebar-actions">
-        <button className="btn btn-primary" onClick={() =>
-          downloadGeoJSON(scenarioData, assignments, editedBlocks, modeKey, studentKey, prekAllocations)
-        }>⬇ Download GeoJSON</button>
+        <button className="btn btn-primary" onClick={onDownload}>Download GeoJSON</button>
         <button className="btn btn-secondary" onClick={onReset}
           disabled={!hasEdits} style={{ opacity: hasEdits ? 1 : 0.45 }}>
-          ↺ Reset to Base
+          Reset to Base
         </button>
       </div>
     </>

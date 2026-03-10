@@ -6,53 +6,80 @@ const WALK_THRESHOLD = 1609.34;
 const MAP_CENTER     = [43.632, -70.270];
 const MAP_ZOOM       = 13;
 
-function getModeStudentKey(modeKey) {
-  if (!modeKey) return 'studentsK4';
-  if (modeKey.startsWith('prek1')) return 'studentsK1';
-  if (modeKey === 'g24')           return 'studentsG24';
-  return 'studentsK4';
-}
+// ── Parsing ──────────────────────────────────────────────────────────────────
 
 function parseGeoJSON(geojson) {
   const { metadata, features } = geojson;
-  const { openSchools, schools, modeKey, prekAllocations } = metadata;
+  const { isGradeCenter, openSchools, schools } = metadata;
 
   const blocks = features.map(f => ({
-    id:             f.properties.block_id,
-    geometry:       f.geometry,
-    population:     f.properties.population,
-    studentsK4:     f.properties.students_k4,
-    studentsK1:     f.properties.students_k1,
-    studentsG24:    f.properties.students_g24,
-    walkDists:      f.properties.all_walk_dists  || {},
-    driveDists:     f.properties.all_drive_dists || {},
-    baseAssignment: f.properties.assigned_school,
+    id:          f.properties.block_id,
+    geometry:    f.geometry,
+    population:  f.properties.population,
+    studentsK4:  f.properties.students_k4,
+    studentsK1:  f.properties.students_k1,
+    studentsG24: f.properties.students_g24,
+    walkDists:   f.properties.all_walk_dists  || {},
+    driveDists:  f.properties.all_drive_dists || {},
+    // base assignments for reset / labeling
+    basePrek1:  f.properties.assigned_prek1,
+    baseG24:    f.properties.assigned_g24,
+    baseSchool: f.properties.assigned_school,
   }));
 
-  const initAssignments = {};
-  features.forEach(f => { initAssignments[f.properties.block_id] = f.properties.assigned_school; });
-
-  const studentKey = getModeStudentKey(modeKey);
-  return { blocks, openSchools, schools, modeKey, studentKey,
-           prekAllocations: prekAllocations || {}, initAssignments, metadata };
+  if (isGradeCenter) {
+    const { modeOption, prek1Schools, g24Schools, prekAllocations } = metadata;
+    const initPrek1 = {}, initG24 = {};
+    features.forEach(f => {
+      initPrek1[f.properties.block_id] = f.properties.assigned_prek1;
+      initG24[f.properties.block_id]   = f.properties.assigned_g24;
+    });
+    return {
+      isGradeCenter: true,
+      blocks, openSchools, schools,
+      modeOption, prek1Schools, g24Schools,
+      prekAllocations: prekAllocations || {},
+      initPrek1, initG24, metadata,
+    };
+  } else {
+    const { modeKey, prekAllocations } = metadata;
+    const studentKey = modeKey.startsWith('prek1') ? 'studentsK1'
+                     : modeKey === 'g24'            ? 'studentsG24'
+                     : 'studentsK4';
+    const initAssignments = {};
+    features.forEach(f => { initAssignments[f.properties.block_id] = f.properties.assigned_school; });
+    return {
+      isGradeCenter: false,
+      blocks, openSchools, schools,
+      modeKey, studentKey,
+      prekAllocations: prekAllocations || {},
+      initAssignments, metadata,
+    };
+  }
 }
+
+// ── Shared map component ──────────────────────────────────────────────────────
 
 function blockStyle(color, isSelected) {
   return { fillColor: color, fillOpacity: 0.65, color: '#555', weight: isSelected ? 2.5 : 0.6 };
 }
 
-function UploadMap({ parsed, assignments, selectedBlockId, onBlockClick }) {
+function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlockClick }) {
   const mapElRef  = useRef(null);
   const mapRef    = useRef(null);
   const layersRef = useRef({});
   const cbRef     = useRef(onBlockClick);
   const asgnRef   = useRef(assignments);
+  const vsRef     = useRef(visibleSchools);
 
-  useEffect(() => { cbRef.current  = onBlockClick;  });
-  useEffect(() => { asgnRef.current = assignments; });
+  useEffect(() => { cbRef.current  = onBlockClick;   });
+  useEffect(() => { asgnRef.current = assignments;    });
+  useEffect(() => { vsRef.current   = visibleSchools; });
 
   useEffect(() => {
-    const { blocks, schools, openSchools, studentKey } = parsed;
+    const { blocks, schools } = parsed;
+    const activeSchools = visibleSchools;
+
     const map = L.map(mapElRef.current, { center: MAP_CENTER, zoom: MAP_ZOOM });
     mapRef.current = map;
 
@@ -71,20 +98,18 @@ function UploadMap({ parsed, assignments, selectedBlockId, onBlockClick }) {
         const wd  = curSid ? (block.walkDists[curSid]  ?? null) : null;
         const dd  = curSid ? (block.driveDists[curSid] ?? null) : null;
         const fmt = m => m !== null ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
-        const stud = (block[studentKey] || 0).toFixed(1);
         layer.bindTooltip(
-          `<b>${block.id}</b><br>Pop: ${block.population} · Students: ${stud}<br>` +
+          `<b>${block.id}</b><br>Pop: ${block.population}<br>` +
           `Assigned: ${curSid || '—'}<br>Walk: ${fmt(wd)} · Drive: ${fmt(dd)}`,
           { sticky: true }
         ).openTooltip(e.latlng);
       });
       layer.on('mouseout', () => layer.unbindTooltip());
-
       layer.addTo(map);
       layersRef.current[block.id] = layer;
     });
 
-    openSchools.forEach(sid => {
+    activeSchools.forEach(sid => {
       const s = schools[sid];
       if (!s) return;
       L.circle([s.lat, s.lng], {
@@ -113,13 +138,15 @@ function UploadMap({ parsed, assignments, selectedBlockId, onBlockClick }) {
   return <div ref={mapElRef} className="map-el" />;
 }
 
+// ── Stats sidebar ─────────────────────────────────────────────────────────────
+
 function fmtMi(m) {
   return m !== null && m !== undefined ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
 }
 
-function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onClear }) {
-  const { openSchools, schools, studentKey, prekAllocations, modeKey, metadata } = parsed;
-  const metrics = computeMetrics(parsed.blocks, assignments, openSchools, schools, studentKey, prekAllocations);
+function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear }) {
+  const { schools, prekAllocations, metadata, modeOption, modeKey } = parsed;
+  const metrics = computeMetrics(parsed.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations);
 
   const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
   const walkDist  = selectedBlock && assignedSchool ? (selectedBlock.walkDists[assignedSchool]  ?? null) : null;
@@ -130,6 +157,17 @@ function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onCl
   const scenarioLabel = metadata.scenario
     ? metadata.scenario.replace(/_closed$/, ' Closed').replace(/_/g, ' ')
     : 'Uploaded';
+  const modeLabel = parsed.isGradeCenter
+    ? `Grade Centers · ${(modeOption || '').replace('prek1_', '')} PreK`
+    : (modeKey || '').replace(/_/g, ' ');
+
+  // Base assignment for current view (to label "original" in dropdown)
+  function baseFor(block) {
+    if (!block) return null;
+    return parsed.isGradeCenter
+      ? (studentKey === 'studentsK1' ? block.basePrek1 : block.baseG24)
+      : block.baseSchool;
+  }
 
   return (
     <>
@@ -137,13 +175,13 @@ function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onCl
         <div className="sidebar-section">
           <div className="sidebar-section-title">{scenarioLabel}</div>
           <div className="school-stat" style={{ marginBottom: 4 }}>
-            Mode: <strong>{modeKey}</strong>
+            Mode: <strong>{modeLabel}</strong>
           </div>
         </div>
 
         <div className="sidebar-section">
           <div className="sidebar-section-title">School Enrollment</div>
-          {openSchools.map(sid => {
+          {visibleSchools.map(sid => {
             const m = metrics[sid];
             if (!m) return null;
             const pct    = Math.min(m.utilization * 100, 100);
@@ -164,7 +202,8 @@ function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onCl
                   {m.prekCount > 0 && <span className="prek-note"> (incl. {m.prekCount} PreK)</span>}
                 </div>
                 <div className="school-stat">
-                  {m.pctWithin1Mile.toFixed(0)}% within 1 mi
+                  {m.pctWithin1Mile.toFixed(0)}% walkable
+                  <span className="stat-muted"> · {m.walkableStudents.toFixed(0)} students within 1 mi</span>
                 </div>
                 <div className="school-stat">
                   {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}
@@ -182,23 +221,22 @@ function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onCl
           <div className="block-stat-row">Block: <span title={selectedBlock.id}>{selectedBlock.id.slice(-9)}</span></div>
           <div className="block-stat-row">Population: <span>{selectedBlock.population}</span></div>
           <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
-          {assignedSchool && (
-            <>
-              <div className="block-stat-row">
-                Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span> {isWalkable ? 'Walk' : 'Drive'}
-              </div>
-              <div className="block-stat-row">Drive to {assignedSchool}: <span>{fmtMi(driveDist)}</span></div>
-            </>
-          )}
+          {assignedSchool && <>
+            <div className="block-stat-row">
+              Walk to {assignedSchool}: <span>{fmtMi(walkDist)}</span>
+              {' '}{isWalkable ? '(walkable)' : '(bussed)'}
+            </div>
+            <div className="block-stat-row">Drive to {assignedSchool}: <span>{fmtMi(driveDist)}</span></div>
+          </>}
           <div className="reassign-label">Assign to:</div>
           <select
             className="reassign-select"
             value={assignedSchool || ''}
             onChange={e => onReassign(selectedBlock.id, e.target.value)}
           >
-            {openSchools.map(sid => (
+            {visibleSchools.map(sid => (
               <option key={sid} value={sid}>
-                {sid}{sid === selectedBlock.baseAssignment ? ' (original)' : ''}
+                {sid}{sid === baseFor(selectedBlock) ? ' (original)' : ''}
               </option>
             ))}
           </select>
@@ -212,9 +250,14 @@ function UploadStatsPanel({ parsed, assignments, selectedBlock, onReassign, onCl
   );
 }
 
+// ── Main UploadTab ────────────────────────────────────────────────────────────
+
 export default function UploadTab({ active }) {
   const [parsed,        setParsed]        = useState(null);
-  const [assignments,   setAssignments]   = useState(null);
+  const [assignments,   setAssignments]   = useState(null);   // community mode
+  const [prek1Asgn,     setPrek1Asgn]     = useState(null);   // grade-center prek1 band
+  const [g24Asgn,       setG24Asgn]       = useState(null);   // grade-center g24 band
+  const [gradeLevel,    setGradeLevel]    = useState('prek1');
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [dragOver,      setDragOver]      = useState(false);
   const [error,         setError]         = useState(null);
@@ -235,8 +278,17 @@ export default function UploadTab({ active }) {
         }
         const p = parseGeoJSON(geojson);
         setParsed(p);
-        setAssignments({ ...p.initAssignments });
         setSelectedBlock(null);
+        setGradeLevel('prek1');
+        if (p.isGradeCenter) {
+          setPrek1Asgn({ ...p.initPrek1 });
+          setG24Asgn({ ...p.initG24 });
+          setAssignments(null);
+        } else {
+          setAssignments({ ...p.initAssignments });
+          setPrek1Asgn(null);
+          setG24Asgn(null);
+        }
       } catch {
         setError('Could not parse file. Please upload a valid GeoJSON file.');
       }
@@ -252,14 +304,19 @@ export default function UploadTab({ active }) {
   }
 
   function handleClear() {
-    setParsed(null);
-    setAssignments(null);
-    setSelectedBlock(null);
-    setError(null);
+    setParsed(null); setAssignments(null);
+    setPrek1Asgn(null); setG24Asgn(null);
+    setSelectedBlock(null); setError(null);
   }
 
   function handleReassign(blockId, newSchool) {
-    setAssignments(prev => ({ ...prev, [blockId]: newSchool }));
+    if (!parsed) return;
+    if (parsed.isGradeCenter) {
+      if (gradeLevel === 'prek1') setPrek1Asgn(prev => ({ ...prev, [blockId]: newSchool }));
+      else                        setG24Asgn(prev   => ({ ...prev, [blockId]: newSchool }));
+    } else {
+      setAssignments(prev => ({ ...prev, [blockId]: newSchool }));
+    }
   }
 
   if (!active) return <div className="scenario-view hidden" />;
@@ -280,11 +337,8 @@ export default function UploadTab({ active }) {
           </div>
           <label className="btn btn-secondary upload-browse">
             Browse file
-            <input
-              type="file" accept=".geojson,.json"
-              style={{ display: 'none' }}
-              onChange={e => { if (e.target.files[0]) handleFile(e.target.files[0]); }}
-            />
+            <input type="file" accept=".geojson,.json" style={{ display: 'none' }}
+              onChange={e => { if (e.target.files[0]) handleFile(e.target.files[0]); }} />
           </label>
           {error && <div className="upload-error">{error}</div>}
         </div>
@@ -292,20 +346,48 @@ export default function UploadTab({ active }) {
     );
   }
 
+  // Derive active view for grade-center vs community
+  const gcMode      = parsed.isGradeCenter;
+  const activeAsgn  = gcMode
+    ? (gradeLevel === 'prek1' ? prek1Asgn : g24Asgn)
+    : assignments;
+  const visSchools  = gcMode
+    ? (gradeLevel === 'prek1' ? parsed.prek1Schools : parsed.g24Schools)
+    : parsed.openSchools;
+  const studKey     = gcMode
+    ? (gradeLevel === 'prek1' ? 'studentsK1' : 'studentsG24')
+    : parsed.studentKey;
+
   return (
     <div className="scenario-view">
       <div className="map-container">
         <UploadMap
           parsed={parsed}
-          assignments={assignments}
+          assignments={activeAsgn}
+          visibleSchools={visSchools}
           selectedBlockId={selectedBlock?.id ?? null}
           onBlockClick={setSelectedBlock}
         />
+        {/* Grade-band overlay for uploaded grade-center files */}
+        {gcMode && (
+          <div className="grade-band-overlay">
+            <button
+              className={`band-btn${gradeLevel === 'prek1' ? ' active' : ''}`}
+              onClick={() => { setGradeLevel('prek1'); setSelectedBlock(null); }}
+            >PreK–1</button>
+            <button
+              className={`band-btn${gradeLevel === 'g24' ? ' active' : ''}`}
+              onClick={() => { setGradeLevel('g24'); setSelectedBlock(null); }}
+            >2–4</button>
+          </div>
+        )}
       </div>
       <div className="sidebar">
-        <UploadStatsPanel
+        <UploadStats
           parsed={parsed}
-          assignments={assignments}
+          assignments={activeAsgn}
+          visibleSchools={visSchools}
+          studentKey={studKey}
           selectedBlock={selectedBlock}
           onReassign={handleReassign}
           onClear={handleClear}

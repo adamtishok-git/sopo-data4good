@@ -23,8 +23,12 @@ export default function MapView({
   const mapRef     = useRef(null);
   const layersRef  = useRef({});
   const clickCbRef = useRef(onBlockClick);
+  const asgnRef    = useRef(assignments);
+  const studKeyRef = useRef(studentKey);
 
   useEffect(() => { clickCbRef.current = onBlockClick; });
+  useEffect(() => { asgnRef.current    = assignments;  });
+  useEffect(() => { studKeyRef.current = studentKey;   });
 
   // Initialize map once on mount
   useEffect(() => {
@@ -37,7 +41,6 @@ export default function MapView({
       attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19,
     }).addTo(map);
 
-    // Block polygons — use community_current as initial color source
     blocks.forEach(block => {
       const sid   = assignments[block.id];
       const color = sid && schools[sid] ? schools[sid].color : '#ccc';
@@ -45,11 +48,12 @@ export default function MapView({
 
       layer.on('click', () => clickCbRef.current(block));
       layer.on('mouseover', e => {
-        const curSid = assignments[block.id];
+        const curSid = asgnRef.current[block.id];
+        const sk     = studKeyRef.current;
         const wd  = curSid ? block.walkDists[curSid]  : null;
         const dd  = curSid ? block.driveDists[curSid] : null;
         const fmt = m => m !== null ? (m / 1609.34).toFixed(2) + ' mi' : 'N/A';
-        const stud = (block[studentKey] || 0).toFixed(1);
+        const stud = (block[sk] || 0).toFixed(1);
         layer.bindTooltip(
           `<b>${block.id}</b><br>` +
           `Pop: ${block.population} · Students: ${stud}<br>` +
@@ -64,7 +68,7 @@ export default function MapView({
       layersRef.current[block.id] = layer;
     });
 
-    // School markers + walk circles — only for visible schools
+    // School markers + walk circles
     visibleSchools.forEach(sid => {
       const s = schools[sid];
       if (!s) return;
@@ -73,10 +77,9 @@ export default function MapView({
       }).addTo(map);
       L.circleMarker([s.lat, s.lng], {
         radius: 9, color: '#fff', weight: 2, fillColor: s.color, fillOpacity: 1,
-      }).bindTooltip(`${sid}`, { permanent: false }).addTo(map);
+      }).bindTooltip(sid, { permanent: false }).addTo(map);
     });
 
-    mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; layersRef.current = {}; };
   }, []); // eslint-disable-line
 
