@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ScenarioView from './components/ScenarioView'
 import UploadTab    from './components/UploadTab'
 import AboutModal   from './components/AboutModal'
+
+const BOUNDARIES_URL = 'https://www.arcgis.com/apps/instant/basic/index.html?appid=185441c7918f4681b4653653fc30a27c';
 
 // Alphabetical by school name
 const SCENARIO_KEYS = ['brown_closed', 'dyer_closed', 'kaler_closed', 'small_closed'];
@@ -53,12 +55,19 @@ function initScenarioStates(data) {
 }
 
 export default function App() {
-  const [activeTab,      setActiveTab]      = useState('brown_closed');
-  const [modeOption,     setModeOption]     = useState('community_current');
-  const [gradeLevel,     setGradeLevel]     = useState('prek1');
-  const [showAbout,      setShowAbout]      = useState(false);
-  const [scenarioData,   setScenarioData]   = useState(null);
-  const [scenarioStates, setScenarioStates] = useState(null);
+  const [activeTab,        setActiveTab]        = useState('brown_closed');
+  const [modeOption,       setModeOption]       = useState('community_current');
+  const [gradeLevel,       setGradeLevel]       = useState('prek1');
+  const [showAbout,        setShowAbout]        = useState(false);
+  const [dlDropdownOpen,   setDlDropdownOpen]   = useState(false);
+  const [scenarioData,     setScenarioData]     = useState(null);
+  const [scenarioStates,   setScenarioStates]   = useState(null);
+
+  // Download handlers registered by the active ScenarioView / UploadTab
+  const downloadHandlers = useRef({ geojson: null, png: null });
+  function handleRegisterDownload(handlers) {
+    downloadHandlers.current = handlers;
+  }
 
   useEffect(() => {
     Promise.all(SCENARIO_KEYS.map(k => fetch(`/data/${k}.json`).then(r => r.json())))
@@ -117,7 +126,7 @@ export default function App() {
   const studentKey = getStudentKey(modeKey);
 
   return (
-    <div className="app">
+    <div className="app" onClick={() => dlDropdownOpen && setDlDropdownOpen(false)}>
       <header className="header">
         <h1>South Portland Elementary School Redistricting</h1>
         <div className="header-right">
@@ -154,6 +163,47 @@ export default function App() {
         >
           Upload Zones
         </button>
+
+        {/* Right-side tab bar actions */}
+        <div className="tabs-right">
+          <a
+            className="tab-action-btn"
+            href={BOUNDARIES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Current Boundaries ↗
+          </a>
+
+          {/* Download dropdown */}
+          <div className="dl-wrapper" onClick={e => e.stopPropagation()}>
+            <button
+              className="tab-action-btn dl-btn"
+              onClick={() => setDlDropdownOpen(v => !v)}
+              title="Download / Export"
+            >
+              ⬇ Export
+            </button>
+            {dlDropdownOpen && (
+              <div className="dl-dropdown">
+                <button
+                  className="dl-option"
+                  disabled={!downloadHandlers.current.geojson}
+                  onClick={() => { downloadHandlers.current.geojson?.(); setDlDropdownOpen(false); }}
+                >
+                  Download GeoJSON
+                </button>
+                <button
+                  className="dl-option"
+                  disabled={!downloadHandlers.current.png}
+                  onClick={() => { downloadHandlers.current.png?.(); setDlDropdownOpen(false); }}
+                >
+                  Export PNG
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="main">
@@ -172,9 +222,13 @@ export default function App() {
             onGradeLevelChange={setGradeLevel}
             onReassign={(mk, blockId, school) => reassignBlock(key, mk, blockId, school)}
             onReset={(mk) => resetMode(key, mk)}
+            onRegisterDownload={handleRegisterDownload}
           />
         ))}
-        <UploadTab active={activeTab === 'upload'} />
+        <UploadTab
+          active={activeTab === 'upload'}
+          onRegisterDownload={handleRegisterDownload}
+        />
       </div>
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}

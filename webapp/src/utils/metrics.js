@@ -1,6 +1,48 @@
 const WALK_THRESHOLD = 1609.34;
 
 /**
+ * Compute % of students who would change schools under the proposed assignment.
+ *
+ * Community mode: compare K-4 assignment to current school.
+ * Grade-center mode: K+1 students → compare prek1 assignment; 2+3+4 → compare g24 assignment.
+ * PreK excluded (citywide draw, no address data).
+ *
+ * Returns { pctChange, totalStudents, changedStudents }
+ */
+export function computeChangeRate(blocks, gcMode, assignments, prek1Assignments, g24Assignments) {
+  let totalStudents   = 0;
+  let changedStudents = 0;
+
+  for (const block of blocks) {
+    if (!gcMode) {
+      const assignedSchool = assignments[block.id];
+      const cs    = block.currentSchoolsK4 || {};
+      const total = Object.values(cs).reduce((s, v) => s + v, 0);
+      const stays = assignedSchool ? (cs[assignedSchool] || 0) : 0;
+      totalStudents   += total;
+      changedStudents += total - stays;
+    } else {
+      const prek1School = prek1Assignments?.[block.id];
+      const g24School   = g24Assignments?.[block.id];
+      const csK1  = block.currentSchoolsK1  || {};
+      const csG24 = block.currentSchoolsG24 || {};
+      const totalK1  = Object.values(csK1).reduce((s, v) => s + v, 0);
+      const totalG24 = Object.values(csG24).reduce((s, v) => s + v, 0);
+      totalStudents   += totalK1 + totalG24;
+      changedStudents += (totalK1  - (prek1School ? (csK1[prek1School]   || 0) : 0))
+                       + (totalG24 - (g24School   ? (csG24[g24School]    || 0) : 0));
+    }
+  }
+
+  const pctChange = totalStudents > 0 ? (changedStudents / totalStudents) * 100 : 0;
+  return {
+    pctChange:      Math.round(pctChange),
+    totalStudents:  Math.round(totalStudents * 10) / 10,
+    changedStudents: Math.round(changedStudents * 10) / 10,
+  };
+}
+
+/**
  * Compute per-school metrics for one mode.
  *
  * studentKey: "studentsK4" | "studentsK1" | "studentsG24"

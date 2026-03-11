@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import html2canvas from 'html2canvas'
-import { computeMetrics } from '../utils/metrics.js'
+import { computeMetrics, computeChangeRate } from '../utils/metrics.js'
 
 const WALK_THRESHOLD = 1609.34;
 const MAP_CENTER     = [43.632, -70.270];
@@ -141,7 +141,7 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 
-function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear, onExportPNG }) {
+function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear }) {
   const { schools, prekAllocations, metadata, modeOption, modeKey } = parsed;
   const metrics = computeMetrics(parsed.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations);
 
@@ -241,7 +241,6 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
       )}
 
       <div className="sidebar-actions">
-        <button className="btn btn-secondary" onClick={onExportPNG}>Export PNG</button>
         <button className="btn btn-secondary" onClick={onClear}>Clear Upload</button>
       </div>
     </>
@@ -250,7 +249,7 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
 
 // ── Main UploadTab ────────────────────────────────────────────────────────────
 
-export default function UploadTab({ active }) {
+export default function UploadTab({ active, onRegisterDownload }) {
   const [parsed,        setParsed]        = useState(null);
   const [assignments,   setAssignments]   = useState(null);   // community mode
   const [prek1Asgn,     setPrek1Asgn]     = useState(null);   // grade-center prek1 band
@@ -368,6 +367,20 @@ export default function UploadTab({ active }) {
     ? (gradeLevel === 'prek1' ? 'studentsK1' : 'studentsG24')
     : parsed.studentKey;
 
+  // % change
+  const changeInfo = computeChangeRate(
+    parsed.blocks, gcMode, activeAsgn,
+    gcMode ? prek1Asgn : null,
+    gcMode ? g24Asgn   : null,
+  );
+
+  // Register download handlers with App
+  useEffect(() => {
+    if (active && onRegisterDownload) {
+      onRegisterDownload({ geojson: null, png: handleExportPNG });
+    }
+  });
+
   return (
     <div ref={viewRef} className="scenario-view">
       <div className="map-container">
@@ -378,7 +391,6 @@ export default function UploadTab({ active }) {
           selectedBlockId={selectedBlock?.id ?? null}
           onBlockClick={setSelectedBlock}
         />
-        {/* Grade-band overlay for uploaded grade-center files */}
         {gcMode && (
           <div className="grade-band-overlay">
             <button
@@ -391,6 +403,11 @@ export default function UploadTab({ active }) {
             >2–4</button>
           </div>
         )}
+        <div className="change-overlay">
+          <span className="change-pill">
+            {changeInfo.pctChange}% Change Schools
+          </span>
+        </div>
       </div>
       <div className="sidebar">
         <UploadStats
@@ -401,7 +418,6 @@ export default function UploadTab({ active }) {
           selectedBlock={selectedBlock}
           onReassign={handleReassign}
           onClear={handleClear}
-          onExportPNG={handleExportPNG}
         />
       </div>
     </div>

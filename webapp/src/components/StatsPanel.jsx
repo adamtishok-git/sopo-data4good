@@ -2,7 +2,7 @@ import { computeMetrics } from '../utils/metrics.js'
 
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
-  selectedBlock, onReassign, onReset, onDownload, onExportPNG,
+  selectedBlock, onReassign, onReset,
   modeKey, studentKey, visibleSchools,
 }) {
   const { schools } = scenarioData;
@@ -90,8 +90,6 @@ export default function StatsPanel({
       )}
 
       <div className="sidebar-actions">
-        <button className="btn btn-primary" onClick={onDownload}>Download GeoJSON</button>
-        <button className="btn btn-secondary" onClick={onExportPNG}>Export PNG</button>
         <button className="btn btn-secondary" onClick={onReset}
           disabled={!hasEdits} style={{ opacity: hasEdits ? 1 : 0.45 }}>
           Reset to Base

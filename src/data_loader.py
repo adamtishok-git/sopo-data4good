@@ -1,10 +1,28 @@
 """
 Load and prepare census block geometries and school point data.
 """
+import json
+import os
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point
-from src.config import SCHOOLS, BLOCKS_GEOJSON, TOTAL_K4, TOTAL_K1, TOTAL_G24
+from src.config import SCHOOLS, BLOCKS_GEOJSON
+
+STUDENT_BLOCKS_PATH = "data/student_blocks.json"
+
+
+def _load_student_counts():
+    """Load real per-block student counts from geocoded address data."""
+    with open(STUDENT_BLOCKS_PATH) as f:
+        raw = json.load(f)
+    # raw: {block_id: {grade_key: {school: count}}}
+    result = {}
+    for bid, grades in raw.items():
+        k4  = sum(sum(d.values()) for d in grades.values())
+        k1  = sum(sum(grades.get(g, {}).values()) for g in ("k", "g1"))
+        g24 = sum(sum(grades.get(g, {}).values()) for g in ("g2", "g3", "g4"))
+        result[bid] = {"k4": round(k4, 4), "k1": round(k1, 4), "g24": round(g24, 4)}
+    return result
 
 
 def load_blocks() -> gpd.GeoDataFrame:
@@ -13,9 +31,9 @@ def load_blocks() -> gpd.GeoDataFrame:
 
     Returns a GeoDataFrame with columns:
         block_id, geometry, population, centroid_lat, centroid_lon,
-        students     -- K-4 proportional count  (community zone assignment)
-        students_k1  -- K-1 proportional count  (grade-center PreK-1 band)
-        students_g24 -- 2-4 proportional count  (grade-center 2-4 band)
+        students     -- K-4 actual student count  (community zone assignment)
+        students_k1  -- K-1 actual student count  (grade-center PreK-1 band)
+        students_g24 -- 2-4 actual student count  (grade-center 2-4 band)
         geometry_4326, centroid, centroid_proj
     CRS: EPSG:32619 (UTM 19N, Maine)
     """
@@ -36,17 +54,15 @@ def load_blocks() -> gpd.GeoDataFrame:
         lambda r: Point(r["centroid_lon"], r["centroid_lat"]), axis=1
     )
 
-    # Blocks assumed to have no school-age children (pending real enrollment data).
-    # TODO: revisit with actual per-student address data from the school district.
     NO_STUDENTS_BLOCKS = {"230050030022012"}  # Retirement community
 
-    # Compute student proportions using only eligible residential population
-    eligible_pop = gdf.loc[~gdf["block_id"].isin(NO_STUDENTS_BLOCKS), "population"].sum()
-    gdf["students"]     = (gdf["population"] / eligible_pop * TOTAL_K4 ).round(2)
-    gdf["students_k1"]  = (gdf["population"] / eligible_pop * TOTAL_K1 ).round(2)
-    gdf["students_g24"] = (gdf["population"] / eligible_pop * TOTAL_G24).round(2)
+    # Load real per-block student counts from geocoded address data
+    student_counts = _load_student_counts()
+    gdf["students"]     = gdf["block_id"].map(lambda b: student_counts.get(b, {}).get("k4",  0.0))
+    gdf["students_k1"]  = gdf["block_id"].map(lambda b: student_counts.get(b, {}).get("k1",  0.0))
+    gdf["students_g24"] = gdf["block_id"].map(lambda b: student_counts.get(b, {}).get("g24", 0.0))
 
-    # Zero out excluded blocks
+    # Ensure retirement community block has no students
     gdf.loc[gdf["block_id"].isin(NO_STUDENTS_BLOCKS),
             ["students", "students_k1", "students_g24"]] = 0.0
 

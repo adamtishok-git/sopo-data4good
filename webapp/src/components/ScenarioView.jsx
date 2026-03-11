@@ -1,19 +1,31 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import html2canvas from 'html2canvas'
 import MapView    from './MapView'
 import StatsPanel from './StatsPanel'
 import { downloadGeoJSON } from '../utils/download.js'
+import { computeChangeRate } from '../utils/metrics.js'
 
 export default function ScenarioView({
   scenarioData, states, active,
   modeKey, modeOption, studentKey, visibleSchools,
   gcMode, gradeLevel, onGradeLevelChange,
-  onReassign, onReset,
+  onReassign, onReset, onRegisterDownload,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const viewRef = useRef(null);
 
-  const state = states[modeKey];
+  const state      = states[modeKey];
+  const prek1State = gcMode ? (states[modeOption] || { assignments: {} }) : null;
+  const g24State   = gcMode ? (states['g24']      || { assignments: {} }) : null;
+
+  // % change calculation
+  const changeInfo = computeChangeRate(
+    scenarioData.blocks,
+    gcMode,
+    state.assignments,
+    prek1State?.assignments,
+    g24State?.assignments,
+  );
 
   function handleReassign(blockId, newSchool) {
     onReassign(modeKey, blockId, newSchool);
@@ -24,22 +36,9 @@ export default function ScenarioView({
     onReset(modeKey);
   }
 
-  function handleExportPNG() {
-    if (!viewRef.current) return;
-    const scenario = scenarioData.scenario || 'zones';
-    html2canvas(viewRef.current, { useCORS: true, scale: 2 }).then(canvas => {
-      const link = document.createElement('a');
-      link.download = `${scenario}_${modeKey}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    });
-  }
-
-  function handleDownload() {
+  function handleDownloadGeoJSON() {
     const prekAllocations = scenarioData.prekAllocations[modeKey] || {};
     if (gcMode) {
-      const prek1State = states[modeOption] || { assignments: {}, editedBlocks: new Set() };
-      const g24State   = states['g24']      || { assignments: {}, editedBlocks: new Set() };
       downloadGeoJSON({
         scenarioData,
         isGradeCenter:     true,
@@ -67,6 +66,24 @@ export default function ScenarioView({
     }
   }
 
+  function handleExportPNG() {
+    if (!viewRef.current) return;
+    const scenario = scenarioData.scenario || 'zones';
+    html2canvas(viewRef.current, { useCORS: true, scale: 2 }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `${scenario}_${modeKey}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  }
+
+  // Register download handlers with App whenever this view is active
+  useEffect(() => {
+    if (active && onRegisterDownload) {
+      onRegisterDownload({ geojson: handleDownloadGeoJSON, png: handleExportPNG });
+    }
+  }); // run every render so handlers always have fresh closures
+
   return (
     <div ref={viewRef} className={`scenario-view${active ? '' : ' hidden'}`}>
       <div className="map-container">
@@ -81,7 +98,7 @@ export default function ScenarioView({
             studentKey={studentKey}
           />
         )}
-        {/* Grade-band overlay — floats over map, only in grade-center mode */}
+        {/* Grade-band overlay — floats top-center over map */}
         {gcMode && (
           <div className="grade-band-overlay">
             <button
@@ -94,6 +111,12 @@ export default function ScenarioView({
             >2–4</button>
           </div>
         )}
+        {/* % change overlay — floats top-right over map */}
+        <div className="change-overlay">
+          <span className="change-pill">
+            {changeInfo.pctChange}% Change Schools
+          </span>
+        </div>
       </div>
 
       <div className="sidebar">
@@ -104,8 +127,6 @@ export default function ScenarioView({
           selectedBlock={selectedBlock}
           onReassign={handleReassign}
           onReset={handleReset}
-          onDownload={handleDownload}
-          onExportPNG={handleExportPNG}
           modeKey={modeKey}
           studentKey={studentKey}
           visibleSchools={visibleSchools}

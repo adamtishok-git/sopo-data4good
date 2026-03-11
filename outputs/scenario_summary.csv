@@ -1,5 +1,5 @@
 ,scenario,capacity_feasible,pct_walkable,total_walkable_students,total_non_walkable_students,avg_drive_distance_mi,avg_drive_non_walkable_mi,max_drive_distance_mi,capacity_overflow,all_zones_contiguous,rank_drive,rank_walkable,rank_overflow,composite_rank
-1,kaler_closed,True,64.7,655.3,357.6,0.868,1.178,2.497,0.0,False,1.0,1.0,2.5,1.5
-2,dyer_closed,True,61.1,619.3,393.5,0.909,1.579,3.433,0.0,False,2.0,2.0,2.5,2.1666666666666665
-3,brown_closed,True,53.0,537.2,475.8,1.005,1.363,2.526,0.0,False,3.0,3.0,2.5,2.8333333333333335
-4,small_closed,True,52.4,531.2,481.8,1.186,1.704,3.347,0.0,False,4.0,4.0,2.5,3.5
+1,kaler_closed,True,60.0,607.3,404.8,1.076,2.202,5.081,0.0,False,1.0,1.0,2.5,1.5
+2,brown_closed,True,53.6,542.7,469.3,1.093,1.584,3.444,0.0,False,2.0,3.0,2.5,2.5
+3,small_closed,True,57.1,578.0,434.0,1.207,1.772,3.444,0.0,False,3.0,2.0,2.5,2.5
+4,dyer_closed,True,52.9,535.2,476.9,1.356,2.856,5.61,0.0,False,4.0,4.0,2.5,3.5
