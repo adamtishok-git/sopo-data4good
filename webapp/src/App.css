@@ -119,10 +119,11 @@ body {
   top: 10px;
   right: 10px;
   z-index: 400;
-  pointer-events: none;
 }
 .change-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255,255,255,0.92);
   border: 1px solid #ddd;
   border-radius: 20px;
@@ -132,6 +133,18 @@ body {
   color: #444;
   box-shadow: 0 1px 6px rgba(0,0,0,0.1);
   backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.change-pill:hover {
+  background: rgba(255,235,59,0.25);
+  border-color: #f9a825;
+}
+.change-pill.active {
+  background: rgba(255,235,59,0.85);
+  border-color: #f9a825;
+  color: #7a4f00;
+  box-shadow: 0 1px 8px rgba(249,168,37,0.35);
 }
 
 /* ── Main content ── */
