@@ -35,19 +35,6 @@ import numpy as np
 from src.contiguity import removal_preserves_contiguity, addition_is_contiguous
 from src.config import WALK_THRESHOLD_METERS
 
-# For the initial flood-fill, prefer walk distance for nearby blocks so zones
-# reflect walkable neighborhoods rather than road-network drive quirks.
-# Beyond this cap, fall back to drive distance.
-_WALK_CAP_M = 1.5 * 1609.34  # 1.5 miles
-
-
-def _flood_dist(bid, sid, walk_df, drive_df):
-    """Priority key for flood-fill: walk dist when walkable, else drive dist."""
-    wd = walk_df.loc[bid, sid]
-    if np.isfinite(wd) and wd < _WALK_CAP_M:
-        return wd
-    dd = drive_df.loc[bid, sid]
-    return dd if np.isfinite(dd) else float("inf")
 
 
 def _students_in_zone(school_id, assignments, blocks_gdf):
@@ -101,12 +88,7 @@ def _adjacent_zone_schools(block_id, open_school_ids, assignments, adjacency):
 
 
 def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
-    """Stage 1: Three-phase capacity-bounded flood-fill.
-
-    Uses walk distance as the priority key for blocks within 1.5 miles of a school
-    so zone boundaries reflect walkable neighborhoods rather than drive-route quirks.
-    Falls back to drive distance for distant/bussed blocks.
-    """
+    """Stage 1: Three-phase capacity-bounded flood-fill using drive distance."""
     open_school_ids = list(open_schools.index)
     capacities = open_schools["capacity"].to_dict()
     total_capacity = sum(capacities.values())
@@ -137,8 +119,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             at_capacity.add(sid)
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                fd = _flood_dist(nbr, sid, walk_df, drive_df)
-                heapq.heappush(heap, (fd, nbr, sid))
+                dd = drive_df.loc[nbr, sid]
+                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase A: grow until proportional target
@@ -158,8 +140,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             continue
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                fd = _flood_dist(nbr, sid, walk_df, drive_df)
-                heapq.heappush(heap, (fd, nbr, sid))
+                dd = drive_df.loc[nbr, sid]
+                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase B: remaining blocks → adjacent zones, hard cap respected
@@ -173,8 +155,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
                 continue
             for nbr in adjacency.neighbors(bid):
                 if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                    fd = _flood_dist(nbr, sid, walk_df, drive_df)
-                    heapq.heappush(p2_heap, (fd, nbr, sid))
+                    dd = drive_df.loc[nbr, sid]
+                    heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
                     p2_in_heap.add((nbr, sid))
 
         while p2_heap and unassigned:
@@ -192,8 +174,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             if sid not in at_capacity:
                 for nbr in adjacency.neighbors(bid):
                     if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                        fd = _flood_dist(nbr, sid, walk_df, drive_df)
-                        heapq.heappush(p2_heap, (fd, nbr, sid))
+                        dd = drive_df.loc[nbr, sid]
+                        heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
                         p2_in_heap.add((nbr, sid))
 
     # Phase C: orphan blocks — prefer adjacent zone first, then nearest by drive
@@ -524,6 +506,92 @@ def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjac
             loads[majority_sid] += block_students
             loads[current_sid] -= block_students
             changed = True
+
+        if not changed:
+            break
+
+    return assignments
+
+
+def equalize_loads(assignments, blocks_gdf, open_schools, drive_df, walk_df, adjacency,
+                   walk_threshold_m=1207.0,
+                   imbalance_threshold=0.10, max_iterations=40):
+    """
+    Stage 5: Even out school utilization.
+
+    If any school's utilization deviates from the mean by more than
+    imbalance_threshold, move border blocks (outermost by drive distance) from
+    over-utilized schools to adjacent under-utilized schools, preserving
+    contiguity.  Only moves that keep the source contiguous and the target
+    within capacity are accepted.  Walkable blocks are never moved away from
+    their current school (preserving walkability).
+    """
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+
+    for _ in range(max_iterations):
+        changed = False
+        loads = {sid: sum(blocks_gdf.loc[b, "students"]
+                          for b, s in assignments.items() if s == sid)
+                 for sid in open_school_ids}
+        utils = {sid: loads[sid] / capacities[sid] for sid in open_school_ids}
+        mean_util = sum(utils.values()) / len(utils)
+
+        over_schools = sorted(
+            [s for s in open_school_ids if utils[s] > mean_util + imbalance_threshold],
+            key=lambda s: utils[s], reverse=True,
+        )
+        under_schools = {s for s in open_school_ids
+                         if utils[s] < mean_util - imbalance_threshold}
+
+        # If no school is strictly over threshold but there's still a large spread
+        # (e.g. all schools near capacity but one school is significantly under),
+        # allow movement from the highest-utilization school to the lowest.
+        if not over_schools and under_schools:
+            max_sid = max(open_school_ids, key=lambda s: utils[s])
+            min_sid = min(open_school_ids, key=lambda s: utils[s])
+            if utils[max_sid] - utils[min_sid] > 2 * imbalance_threshold:
+                over_schools = [max_sid]
+            else:
+                break
+        elif not over_schools or not under_schools:
+            break
+
+        for src_sid in over_schools:
+            if utils[src_sid] <= mean_util + imbalance_threshold:
+                continue
+            zone_blocks = sorted(
+                [b for b, s in assignments.items() if s == src_sid],
+                key=lambda b: drive_df.loc[b, src_sid],
+                reverse=True,
+            )
+            for block_id in zone_blocks:
+                if utils[src_sid] <= mean_util + imbalance_threshold:
+                    break
+                # Never move a block that is walkable to its current school
+                wd = walk_df.loc[block_id, src_sid] if src_sid in walk_df.columns else float("inf")
+                if np.isfinite(wd) and wd <= walk_threshold_m:
+                    continue
+                if not removal_preserves_contiguity(block_id, src_sid, assignments, adjacency):
+                    continue
+                adj_under = [
+                    s for s in _adjacent_zone_schools(
+                        block_id, open_school_ids, assignments, adjacency)
+                    if s in under_schools
+                    and loads[s] + blocks_gdf.loc[block_id, "students"] <= capacities[s]
+                ]
+                if not adj_under:
+                    continue
+                best = min(adj_under, key=lambda s: drive_df.loc[block_id, s])
+                bs = blocks_gdf.loc[block_id, "students"]
+                assignments[block_id] = best
+                loads[best] += bs
+                loads[src_sid] -= bs
+                utils[best] = loads[best] / capacities[best]
+                utils[src_sid] = loads[src_sid] / capacities[src_sid]
+                if utils[best] >= mean_util - imbalance_threshold:
+                    under_schools.discard(best)
+                changed = True
 
         if not changed:
             break

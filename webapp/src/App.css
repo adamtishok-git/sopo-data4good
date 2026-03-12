@@ -484,7 +484,8 @@ body {
 /* ── School card expand toggle ── */
 .school-card-toggle { cursor: pointer; }
 .school-card-toggle:hover .school-name { color: #1a73e8; }
-.expand-chevron { margin-left: auto; font-size: 11px; color: #aaa; }
+.expand-chevron { margin-left: auto; width: 20px; height: 20px; color: #bbb; flex-shrink: 0; }
+.school-card-toggle:hover .expand-chevron { color: #1a73e8; }
 
 /* ── Grade breakdown (expanded school card) ── */
 .grade-breakdown {

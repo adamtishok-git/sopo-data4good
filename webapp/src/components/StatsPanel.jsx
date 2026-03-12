@@ -35,7 +35,11 @@ export default function StatsPanel({
                   <span className="school-dot" style={{ background: schools[sid].color }} />
                   <span className="school-name">{sid}</span>
                   {isOver && <span className="over-badge">OVER</span>}
-                  <span className="expand-chevron">{isExp ? '▾' : '▸'}</span>
+                  <svg className="expand-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    {isExp
+                      ? <path d="M7 14l5-5 5 5z"/>
+                      : <path d="M7 10l5 5 5-5z"/>}
+                  </svg>
                 </div>
                 <div className="util-bar-bg">
                   <div className="util-bar-fill"
