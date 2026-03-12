@@ -65,9 +65,8 @@ export default function ScenarioView({
   gcMode, gradeLevel, onGradeLevelChange,
   onReassign, onReset,
 }) {
-  const [selectedBlock,    setSelectedBlock]    = useState(null);
-  const [popupPos,         setPopupPos]         = useState(null);
-  const [showChangedBlocks, setShowChangedBlocks] = useState(false);
+  const [selectedBlock, setSelectedBlock] = useState(null);
+  const [popupPos,      setPopupPos]      = useState(null);
   const viewRef = useRef(null);
 
   const state      = states[modeKey];
@@ -82,27 +81,6 @@ export default function ScenarioView({
     prek1State?.assignments,
     g24State?.assignments,
   );
-
-  // Block IDs where students change schools (for highlight overlay)
-  const changedBlockIds = showChangedBlocks ? (() => {
-    const ids = new Set();
-    for (const block of scenarioData.blocks) {
-      if (!gcMode) {
-        const sid  = state.assignments[block.id];
-        const orig = majoritySchool(block.currentSchoolsK4);
-        if (orig && sid && sid !== orig) ids.add(block.id);
-      } else {
-        const prek1School = prek1State?.assignments[block.id];
-        const g24School   = g24State?.assignments[block.id];
-        const origK1  = majoritySchool(block.currentSchoolsK1);
-        const origG24 = majoritySchool(block.currentSchoolsG24);
-        if ((origK1  && prek1School && prek1School !== origK1) ||
-            (origG24 && g24School   && g24School   !== origG24))
-          ids.add(block.id);
-      }
-    }
-    return ids;
-  })() : null;
 
   function handleBlockClick(block, pos) {
     setSelectedBlock(block);
@@ -171,7 +149,6 @@ export default function ScenarioView({
             onBlockClick={handleBlockClick}
             visibleSchools={visibleSchools}
             studentKey={studentKey}
-            changedBlockIds={changedBlockIds}
           />
         )}
         {selectedBlock && popupPos && (
@@ -203,16 +180,9 @@ export default function ScenarioView({
         )}
         {/* % change overlay — floats top-right over map */}
         <div className="change-overlay">
-          <button
-            className={`change-pill${showChangedBlocks ? ' active' : ''}`}
-            onClick={() => setShowChangedBlocks(v => !v)}
-            title={showChangedBlocks ? 'Click to clear highlight' : 'Click to highlight changed blocks'}
-          >
+          <div className="change-pill">
             {changeInfo.pctChange}% Change Schools
-            <svg xmlns="http://www.w3.org/2000/svg" height="12" width="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-            </svg>
-          </button>
+          </div>
         </div>
       </div>
 

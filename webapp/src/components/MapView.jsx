@@ -5,25 +5,7 @@ const MAP_CENTER   = [43.632, -70.270];
 const MAP_ZOOM     = 13;
 const WALK_RADIUS  = 1207.0; // 0.75 miles
 
-function blockStyle(color, isEdited, isSelected, changeMode, isChanged) {
-  if (changeMode) {
-    if (isChanged) {
-      return {
-        fillColor:   color,
-        fillOpacity: isSelected ? 1 : 0.92,
-        color:       '#fff',
-        weight:      isSelected ? 3 : 2.5,
-        dashArray:   null,
-      };
-    }
-    return {
-      fillColor:   color,
-      fillOpacity: 0.12,
-      color:       '#aaa',
-      weight:      0.3,
-      dashArray:   null,
-    };
-  }
+function blockStyle(color, isEdited, isSelected) {
   return {
     fillColor:   color,
     fillOpacity: 0.65,
@@ -36,7 +18,6 @@ function blockStyle(color, isEdited, isSelected, changeMode, isChanged) {
 export default function MapView({
   scenarioData, assignments, editedBlocks,
   selectedBlockId, onBlockClick, visibleSchools, studentKey,
-  changedBlockIds,
 }) {
   const mapElRef        = useRef(null);
   const mapRef          = useRef(null);
@@ -115,22 +96,20 @@ export default function MapView({
     });
   }, [visibleSchools]); // eslint-disable-line
 
-  // ── Update block styles when assignments / selection / highlight change ──
+  // ── Update block styles when assignments / selection change ──
   useEffect(() => {
     const { schools } = scenarioData;
-    const changeMode = changedBlockIds !== null;
     scenarioData.blocks.forEach(block => {
       const layer = layersRef.current[block.id];
       if (!layer) return;
-      const sid       = assignments[block.id];
-      const color     = sid && schools[sid] ? schools[sid].color : '#ccc';
-      const edited    = editedBlocks.has(block.id);
-      const sel       = block.id === selectedBlockId;
-      const isChanged = changeMode && changedBlockIds.has(block.id);
-      layer.setStyle(blockStyle(color, edited, sel, changeMode, isChanged));
+      const sid    = assignments[block.id];
+      const color  = sid && schools[sid] ? schools[sid].color : '#ccc';
+      const edited = editedBlocks.has(block.id);
+      const sel    = block.id === selectedBlockId;
+      layer.setStyle(blockStyle(color, edited, sel));
       if (sel) layer.bringToFront();
     });
-  }, [assignments, editedBlocks, selectedBlockId, changedBlockIds]); // eslint-disable-line
+  }, [assignments, editedBlocks, selectedBlockId]); // eslint-disable-line
 
   return <div ref={mapElRef} className="map-el" />;
 }
