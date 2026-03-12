@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ScenarioView from './components/ScenarioView'
 import UploadTab    from './components/UploadTab'
 import AboutModal   from './components/AboutModal'
@@ -63,10 +63,14 @@ export default function App() {
   const [scenarioData,     setScenarioData]     = useState(null);
   const [scenarioStates,   setScenarioStates]   = useState(null);
 
-  // Download handlers registered by the active ScenarioView / UploadTab
-  const [downloadHandlers, setDownloadHandlers] = useState({ geojson: null, png: null });
+  // Download handlers registered by the active ScenarioView / UploadTab.
+  // useRef holds the functions (avoids re-render cascade from effect-per-render in ScenarioView).
+  // hasHandlers boolean state controls the disabled prop reactively.
+  const downloadHandlers = useRef({ geojson: null, png: null });
+  const [hasHandlers, setHasHandlers] = useState(false);
   function handleRegisterDownload(handlers) {
-    setDownloadHandlers(handlers);
+    downloadHandlers.current = handlers;
+    setHasHandlers(!!(handlers.geojson || handlers.png));
   }
 
   useEffect(() => {
@@ -189,15 +193,15 @@ export default function App() {
               <div className="dl-dropdown">
                 <button
                   className="dl-option"
-                  disabled={!downloadHandlers.geojson}
-                  onClick={() => { downloadHandlers.geojson?.(); setDlDropdownOpen(false); }}
+                  disabled={!hasHandlers}
+                  onClick={() => { downloadHandlers.current.geojson?.(); setDlDropdownOpen(false); }}
                 >
                   Download GeoJSON
                 </button>
                 <button
                   className="dl-option"
-                  disabled={!downloadHandlers.png}
-                  onClick={() => { downloadHandlers.png?.(); setDlDropdownOpen(false); }}
+                  disabled={!hasHandlers}
+                  onClick={() => { downloadHandlers.current.png?.(); setDlDropdownOpen(false); }}
                 >
                   Export PNG
                 </button>
