@@ -85,6 +85,11 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
         maxDriveMi = dd / 1609.34;
     }
 
+    const gradeTotals = {};
+    for (const g of ['k', 'g1', 'g2', 'g3', 'g4']) {
+      gradeTotals[g] = Math.round(zoneBlocks.reduce((s, b) => s + ((b.studentsPerGrade || {})[g] || 0), 0) * 10) / 10;
+    }
+
     metrics[sid] = {
       zoneStudents:         Math.round(zoneStudents * 10) / 10,
       walkableStudents:     Math.round(walkableStudents * 10) / 10,
@@ -97,6 +102,7 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
       pctWalkable:          Math.round(pctWalkable * 10) / 10,
       avgDriveNonWalkMi:    avgDriveNonWalkMi !== null ? Math.round(avgDriveNonWalkMi * 100) / 100 : null,
       maxDriveMi:           maxDriveMi !== null ? Math.round(maxDriveMi * 100) / 100 : null,
+      gradeTotals,
     };
   }
   return metrics;

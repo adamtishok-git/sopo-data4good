@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { computeMetrics } from '../utils/metrics.js'
+
+const GRADE_LABELS = { k: 'K', g1: '1', g2: '2', g3: '3', g4: '4' };
 
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
-  selectedBlock, onReassign, onReset,
-  modeKey, studentKey, visibleSchools,
+  onReset, modeKey, studentKey, visibleSchools,
 }) {
   const { schools } = scenarioData;
   const prekAllocations = scenarioData.prekAllocations[modeKey] || {};
@@ -11,12 +13,7 @@ export default function StatsPanel({
     scenarioData.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations
   );
   const hasEdits = editedBlocks.size > 0;
-
-  const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
-  const walkDist     = selectedBlock && assignedSchool ? selectedBlock.walkDists[assignedSchool] : null;
-  const isWalkable   = walkDist !== null && walkDist <= 1207.0;
-  const isEdited     = selectedBlock ? editedBlocks.has(selectedBlock.id) : false;
-  const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
+  const [expanded, setExpanded] = useState({});
 
   return (
     <>
@@ -28,12 +25,17 @@ export default function StatsPanel({
             if (!m) return null;
             const pct    = Math.min(m.utilization * 100, 100);
             const isOver = m.overCapacity;
+            const isExp  = !!expanded[sid];
             return (
               <div className="school-card" key={sid}>
-                <div className="school-card-header">
+                <div
+                  className="school-card-header school-card-toggle"
+                  onClick={() => setExpanded(e => ({ ...e, [sid]: !e[sid] }))}
+                >
                   <span className="school-dot" style={{ background: schools[sid].color }} />
                   <span className="school-name">{sid}</span>
                   {isOver && <span className="over-badge">OVER</span>}
+                  <span className="expand-chevron">{isExp ? '▾' : '▸'}</span>
                 </div>
                 <div className="util-bar-bg">
                   <div className="util-bar-fill"
@@ -51,43 +53,21 @@ export default function StatsPanel({
                   {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}
                   {m.maxDriveMi !== null && <span className="stat-muted"> · max {m.maxDriveMi.toFixed(2)} mi</span>}
                 </div>
+                {isExp && (
+                  <div className="grade-breakdown">
+                    {['k', 'g1', 'g2', 'g3', 'g4'].map(g => (
+                      <div key={g} className="grade-item">
+                        <span className="grade-label">{GRADE_LABELS[g]}</span>
+                        <span className="grade-count">{Math.round(m.gradeTotals[g] || 0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
-
-      {selectedBlock && (
-        <div className="block-panel">
-          <div className="block-panel-title">
-            Selected Block
-            {isEdited && <span className="edited-badge">edited</span>}
-          </div>
-          <div className="block-stat-row">Block: <span title={selectedBlock.id}>{selectedBlock.id.slice(-9)}</span></div>
-          <div className="block-stat-row">Population: <span>{selectedBlock.population}</span></div>
-          <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
-          {assignedSchool && (
-            <div className="block-stat-row">
-              To {assignedSchool}:{' '}
-              <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
-                {isWalkable ? 'Walkable' : 'Bussed'}
-              </span>
-            </div>
-          )}
-          <div className="reassign-label">Assign to:</div>
-          <select
-            className="reassign-select"
-            value={assignedSchool || ''}
-            onChange={e => onReassign(selectedBlock.id, e.target.value)}
-          >
-            {visibleSchools.map(sid => (
-              <option key={sid} value={sid}>
-                {sid}{sid === selectedBlock.baseAssignments?.[modeKey] ? ' (base)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       <div className="sidebar-actions">
         <button className="btn btn-secondary" onClick={onReset}

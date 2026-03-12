@@ -37,7 +37,7 @@ with open("data/student_blocks.json") as f:
 # student_blocks: {block_id: {grade_key: {school: count}}}
 
 def block_students(bid):
-    """Return (k4, k1, g24, currentSchoolsK4, currentSchoolsK1, currentSchoolsG24)."""
+    """Return (k4, k1, g24, currentSchoolsK4, currentSchoolsK1, currentSchoolsG24, perGrade)."""
     grades = student_blocks.get(bid, {})
     def merge(keys):
         out = {}
@@ -51,7 +51,8 @@ def block_students(bid):
     k4  = round(sum(cs_k4.values()),  2)
     k1  = round(sum(cs_k1.values()),  2)
     g24 = round(sum(cs_g24.values()), 2)
-    return k4, k1, g24, cs_k4, cs_k1, cs_g24
+    per_grade = {g: round(sum(grades.get(g, {}).values()), 2) for g in ["k", "g1", "g2", "g3", "g4"]}
+    return k4, k1, g24, cs_k4, cs_k1, cs_g24, per_grade
 
 CLOSED_MAP = {s["name"]: s["closed"] for s in SCENARIOS}
 
@@ -102,7 +103,7 @@ for scenario in SCENARIOS:
         if bid in NO_STUDENTS_BLOCKS:
             continue
 
-        k4, k1, g24, cs_k4, cs_k1, cs_g24 = block_students(bid)
+        k4, k1, g24, cs_k4, cs_k1, cs_g24, per_grade = block_students(bid)
         walk_dists  = {sid: safe_dist(walk_df,  bid, sid) for sid in open_school_ids}
         drive_dists = {sid: safe_dist(drive_df, bid, sid) for sid in open_school_ids}
         base_assignments = {mode: asgn.get(bid) for mode, asgn in modes.items()}
@@ -114,6 +115,7 @@ for scenario in SCENARIOS:
             "studentsK4":       k4,
             "studentsK1":       k1,
             "studentsG24":      g24,
+            "studentsPerGrade": per_grade,
             # Current school distribution — used by webapp to compute % change
             "currentSchoolsK4":  cs_k4,
             "currentSchoolsK1":  cs_k1,

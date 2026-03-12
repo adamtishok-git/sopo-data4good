@@ -5,6 +5,44 @@ import StatsPanel from './StatsPanel'
 import { downloadGeoJSON } from '../utils/download.js'
 import { computeChangeRate } from '../utils/metrics.js'
 
+const WALK_THRESHOLD = 1207.0;
+const GRADE_LABELS   = { k: 'K', g1: '1st', g2: '2nd', g3: '3rd', g4: '4th' };
+
+function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
+                      studentKey, modeKey, pos, onReassign, onClose }) {
+  const assignedSchool = assignments[block.id];
+  const walkDist   = assignedSchool ? block.walkDists[assignedSchool] : null;
+  const isWalkable = walkDist !== null && walkDist <= WALK_THRESHOLD;
+  const isEdited   = editedBlocks.has(block.id);
+  const students   = (block[studentKey] || 0).toFixed(1);
+  const baseSchool = block.baseAssignments?.[modeKey];
+
+  return (
+    <div className="block-popup" style={{ left: pos.x, top: pos.y }}>
+      <div className="block-popup-header">
+        <span className="block-popup-id">···{block.id.slice(-6)}</span>
+        {isEdited && <span className="edited-badge">edited</span>}
+        <button className="block-popup-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="block-popup-row">{students} est. students</div>
+      <div className="block-popup-row">
+        <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
+          {isWalkable ? 'Walkable' : 'Bussed'}
+        </span>
+      </div>
+      <select
+        className="reassign-select"
+        value={assignedSchool || ''}
+        onChange={e => onReassign(block.id, e.target.value)}
+      >
+        {visibleSchools.map(sid => (
+          <option key={sid} value={sid}>{sid}{sid === baseSchool ? ' (base)' : ''}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function ScenarioView({
   scenarioData, states, active,
   modeKey, modeOption, studentKey, visibleSchools,
@@ -12,6 +50,7 @@ export default function ScenarioView({
   onReassign, onReset,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
+  const [popupPos,      setPopupPos]      = useState(null);
   const viewRef = useRef(null);
 
   const state      = states[modeKey];
@@ -26,6 +65,11 @@ export default function ScenarioView({
     prek1State?.assignments,
     g24State?.assignments,
   );
+
+  function handleBlockClick(block, pos) {
+    setSelectedBlock(block);
+    setPopupPos(pos || null);
+  }
 
   function handleReassign(blockId, newSchool) {
     onReassign(modeKey, blockId, newSchool);
@@ -86,9 +130,23 @@ export default function ScenarioView({
             assignments={state.assignments}
             editedBlocks={state.editedBlocks}
             selectedBlockId={selectedBlock?.id ?? null}
-            onBlockClick={setSelectedBlock}
+            onBlockClick={handleBlockClick}
             visibleSchools={visibleSchools}
             studentKey={studentKey}
+          />
+        )}
+        {selectedBlock && popupPos && (
+          <BlockPopup
+            block={selectedBlock}
+            assignments={state.assignments}
+            editedBlocks={state.editedBlocks}
+            visibleSchools={visibleSchools}
+            schools={scenarioData.schools}
+            studentKey={studentKey}
+            modeKey={modeKey}
+            pos={popupPos}
+            onReassign={handleReassign}
+            onClose={() => setSelectedBlock(null)}
           />
         )}
         {/* Grade-band overlay — floats top-center over map */}
@@ -117,19 +175,19 @@ export default function ScenarioView({
           scenarioData={scenarioData}
           assignments={state.assignments}
           editedBlocks={state.editedBlocks}
-          selectedBlock={selectedBlock}
-          onReassign={handleReassign}
           onReset={handleReset}
           modeKey={modeKey}
           studentKey={studentKey}
           visibleSchools={visibleSchools}
         />
-        <div className="sidebar-actions">
-          <button className="btn btn-secondary" onClick={handleDownloadGeoJSON}>
-            Download GeoJSON
+        <div className="sidebar-actions sidebar-export-row">
+          <button className="btn btn-secondary btn-export" onClick={handleDownloadGeoJSON}>
+            <svg xmlns="http://www.w3.org/2000/svg" height="13" width="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            GeoJSON
           </button>
-          <button className="btn btn-secondary" onClick={handleExportPNG}>
-            Export PNG
+          <button className="btn btn-secondary btn-export" onClick={handleExportPNG}>
+            <svg xmlns="http://www.w3.org/2000/svg" height="13" width="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            PNG
           </button>
         </div>
       </div>

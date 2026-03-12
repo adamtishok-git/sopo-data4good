@@ -93,7 +93,7 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
       const color = sid && schools[sid] ? schools[sid].color : '#ccc';
       const layer = L.geoJSON(block.geometry, { style: blockStyle(color, false) });
 
-      layer.on('click', () => cbRef.current(block));
+      layer.on('click', e => { L.DomEvent.stopPropagation(e); cbRef.current(block, e.containerPoint); });
       layer.on('mouseover', e => {
         const curSid  = asgnRef.current[block.id];
         const wd      = curSid ? (block.walkDists[curSid] ?? null) : null;
@@ -121,6 +121,8 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
       }).bindTooltip(sid).addTo(map);
     });
 
+    map.on('click', () => cbRef.current(null, null));
+
     return () => { map.remove(); mapRef.current = null; layersRef.current = {}; };
   }, []); // eslint-disable-line
 
@@ -141,14 +143,9 @@ function UploadMap({ parsed, assignments, visibleSchools, selectedBlockId, onBlo
 
 // ── Stats sidebar ─────────────────────────────────────────────────────────────
 
-function UploadStats({ parsed, assignments, visibleSchools, studentKey, selectedBlock, onReassign, onClear }) {
+function UploadStats({ parsed, assignments, visibleSchools, studentKey, onClear }) {
   const { schools, prekAllocations, metadata, modeOption, modeKey } = parsed;
   const metrics = computeMetrics(parsed.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations);
-
-  const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
-  const walkDist     = selectedBlock && assignedSchool ? (selectedBlock.walkDists[assignedSchool] ?? null) : null;
-  const isWalkable   = walkDist !== null && walkDist <= WALK_THRESHOLD;
-  const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
 
   const scenarioLabel = metadata.scenario
     ? metadata.scenario.replace(/_closed$/, ' Closed').replace(/_/g, ' ')
@@ -156,14 +153,6 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
   const modeLabel = parsed.isGradeCenter
     ? `Grade Centers · ${(modeOption || '').replace('prek1_', '')} PreK`
     : (modeKey || '').replace(/_/g, ' ');
-
-  // Base assignment for current view (to label "original" in dropdown)
-  function baseFor(block) {
-    if (!block) return null;
-    return parsed.isGradeCenter
-      ? (studentKey === 'studentsK1' ? block.basePrek1 : block.baseG24)
-      : block.baseSchool;
-  }
 
   return (
     <>
@@ -211,35 +200,6 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
         </div>
       </div>
 
-      {selectedBlock && (
-        <div className="block-panel">
-          <div className="block-panel-title">Selected Block</div>
-          <div className="block-stat-row">Block: <span title={selectedBlock.id}>{selectedBlock.id.slice(-9)}</span></div>
-          <div className="block-stat-row">Population: <span>{selectedBlock.population}</span></div>
-          <div className="block-stat-row">Est. students: <span>{studentCount.toFixed(1)}</span></div>
-          {assignedSchool && (
-            <div className="block-stat-row">
-              To {assignedSchool}:{' '}
-              <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
-                {isWalkable ? 'Walkable' : 'Bussed'}
-              </span>
-            </div>
-          )}
-          <div className="reassign-label">Assign to:</div>
-          <select
-            className="reassign-select"
-            value={assignedSchool || ''}
-            onChange={e => onReassign(selectedBlock.id, e.target.value)}
-          >
-            {visibleSchools.map(sid => (
-              <option key={sid} value={sid}>
-                {sid}{sid === baseFor(selectedBlock) ? ' (original)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       <div className="sidebar-actions">
         <button className="btn btn-secondary" onClick={onClear}>Clear Upload</button>
       </div>
@@ -256,6 +216,7 @@ export default function UploadTab({ active }) {
   const [g24Asgn,       setG24Asgn]       = useState(null);   // grade-center g24 band
   const [gradeLevel,    setGradeLevel]    = useState('prek1');
   const [selectedBlock, setSelectedBlock] = useState(null);
+  const [popupPos,      setPopupPos]      = useState(null);
   const [dragOver,      setDragOver]      = useState(false);
   const [error,         setError]         = useState(null);
   const viewRef = useRef(null);
@@ -382,8 +343,34 @@ export default function UploadTab({ active }) {
           assignments={activeAsgn}
           visibleSchools={visSchools}
           selectedBlockId={selectedBlock?.id ?? null}
-          onBlockClick={setSelectedBlock}
+          onBlockClick={(block, pos) => { setSelectedBlock(block); setPopupPos(pos || null); }}
         />
+        {selectedBlock && popupPos && activeAsgn && (() => {
+          const sid    = activeAsgn[selectedBlock.id];
+          const wd     = sid ? (selectedBlock.walkDists[sid] ?? null) : null;
+          const walkable = wd !== null && wd <= WALK_THRESHOLD;
+          const baseSchool = parsed.isGradeCenter
+            ? (studKey === 'studentsK1' ? selectedBlock.basePrek1 : selectedBlock.baseG24)
+            : selectedBlock.baseSchool;
+          return (
+            <div className="block-popup" style={{ left: popupPos.x, top: popupPos.y }}>
+              <div className="block-popup-header">
+                <span className="block-popup-id">···{selectedBlock.id.slice(-6)}</span>
+                <button className="block-popup-close" onClick={() => setSelectedBlock(null)}>✕</button>
+              </div>
+              <div className="block-popup-row">{(selectedBlock[studKey] || 0).toFixed(1)} est. students</div>
+              <div className="block-popup-row">
+                <span className={walkable ? 'tag-walkable' : 'tag-bussed'}>{walkable ? 'Walkable' : 'Bussed'}</span>
+              </div>
+              <select className="reassign-select" value={sid || ''}
+                onChange={e => handleReassign(selectedBlock.id, e.target.value)}>
+                {visSchools.map(s => (
+                  <option key={s} value={s}>{s}{s === baseSchool ? ' (original)' : ''}</option>
+                ))}
+              </select>
+            </div>
+          );
+        })()}
         {gcMode && (
           <div className="grade-band-overlay">
             <button
@@ -408,13 +395,12 @@ export default function UploadTab({ active }) {
           assignments={activeAsgn}
           visibleSchools={visSchools}
           studentKey={studKey}
-          selectedBlock={selectedBlock}
-          onReassign={handleReassign}
           onClear={handleClear}
         />
         <div className="sidebar-actions">
-          <button className="btn btn-secondary" onClick={handleExportPNG}>
-            Export PNG
+          <button className="btn btn-secondary btn-export" onClick={handleExportPNG}>
+            <svg xmlns="http://www.w3.org/2000/svg" height="13" width="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            PNG
           </button>
         </div>
       </div>

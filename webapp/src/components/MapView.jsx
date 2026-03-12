@@ -47,7 +47,7 @@ export default function MapView({
       const color = sid && schools[sid] ? schools[sid].color : '#ccc';
       const layer = L.geoJSON(block.geometry, { style: blockStyle(color, false, false) });
 
-      layer.on('click', () => clickCbRef.current(block));
+      layer.on('click', e => { L.DomEvent.stopPropagation(e); clickCbRef.current(block, e.containerPoint); });
       layer.on('mouseover', e => {
         const curSid = asgnRef.current[block.id];
         const sk     = studKeyRef.current;
@@ -67,6 +67,8 @@ export default function MapView({
       layer.addTo(map);
       layersRef.current[block.id] = layer;
     });
+
+    map.on('click', () => clickCbRef.current(null, null));
 
     return () => { map.remove(); mapRef.current = null; layersRef.current = {}; schoolLayersRef.current = []; };
   }, []); // eslint-disable-line
