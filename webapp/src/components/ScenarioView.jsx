@@ -37,7 +37,7 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
       </div>
       {origSchool && (
         <div className="block-popup-row block-popup-orig">
-          Currently: <strong>{origSchool}</strong>
+          Original School: <strong>{origSchool}</strong>
         </div>
       )}
       <select
@@ -88,19 +88,16 @@ export default function ScenarioView({
     const ids = new Set();
     for (const block of scenarioData.blocks) {
       if (!gcMode) {
-        const sid   = state.assignments[block.id];
-        const cs    = block.currentSchoolsK4 || {};
-        const total = Object.values(cs).reduce((s, v) => s + v, 0);
-        if (total > 0 && (cs[sid] || 0) < total) ids.add(block.id);
+        const sid  = state.assignments[block.id];
+        const orig = majoritySchool(block.currentSchoolsK4);
+        if (orig && sid && sid !== orig) ids.add(block.id);
       } else {
         const prek1School = prek1State?.assignments[block.id];
         const g24School   = g24State?.assignments[block.id];
-        const csK1  = block.currentSchoolsK1  || {};
-        const csG24 = block.currentSchoolsG24 || {};
-        const totalK1  = Object.values(csK1).reduce((s, v) => s + v, 0);
-        const totalG24 = Object.values(csG24).reduce((s, v) => s + v, 0);
-        if ((totalK1  > 0 && (csK1[prek1School]  || 0) < totalK1) ||
-            (totalG24 > 0 && (csG24[g24School]   || 0) < totalG24))
+        const origK1  = majoritySchool(block.currentSchoolsK1);
+        const origG24 = majoritySchool(block.currentSchoolsG24);
+        if ((origK1  && prek1School && prek1School !== origK1) ||
+            (origG24 && g24School   && g24School   !== origG24))
           ids.add(block.id);
       }
     }
