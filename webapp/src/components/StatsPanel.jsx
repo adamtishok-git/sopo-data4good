@@ -14,7 +14,7 @@ export default function StatsPanel({
 
   const assignedSchool = selectedBlock ? assignments[selectedBlock.id] : null;
   const walkDist     = selectedBlock && assignedSchool ? selectedBlock.walkDists[assignedSchool] : null;
-  const isWalkable   = walkDist !== null && walkDist <= 1609.34;
+  const isWalkable   = walkDist !== null && walkDist <= 1207.0;
   const isEdited     = selectedBlock ? editedBlocks.has(selectedBlock.id) : false;
   const studentCount = selectedBlock ? (selectedBlock[studentKey] || 0) : 0;
 
@@ -45,7 +45,7 @@ export default function StatsPanel({
                 </div>
                 <div className="school-stat">
                   {m.pctWalkable.toFixed(0)}% walkable
-                  <span className="stat-muted"> ({m.walkableStudents.toFixed(0)} students within 1 mi)</span>
+                  <span className="stat-muted"> ({m.walkableStudents.toFixed(0)} students within 0.75 mi)</span>
                 </div>
                 <div className="school-stat">
                   {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}

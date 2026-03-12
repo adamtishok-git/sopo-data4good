@@ -1,4 +1,4 @@
-const WALK_THRESHOLD = 1609.34;
+const WALK_THRESHOLD = 1207.0; // 0.75 miles
 
 export function downloadGeoJSON({
   scenarioData,

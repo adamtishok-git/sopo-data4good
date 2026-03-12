@@ -1,4 +1,4 @@
-const WALK_THRESHOLD = 1609.34;
+const WALK_THRESHOLD = 1207.0; // 0.75 miles
 
 /**
  * Compute % of students who would change schools under the proposed assignment.
@@ -58,7 +58,7 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
     const totalEnrolled = zoneStudents + prekCount;
     const capacity = schools[sid].capacity;
 
-    // Walkable = pedestrian route exists via OSM AND distance ≤ 1-mile policy threshold
+    // Walkable = pedestrian route exists via OSM AND distance ≤ 0.75-mile policy threshold
     const walkableBlocks    = zoneBlocks.filter(b => b.walkDists[sid] !== null && b.walkDists[sid] <= WALK_THRESHOLD);
     const nonWalkableBlocks = zoneBlocks.filter(b => b.walkDists[sid] === null  || b.walkDists[sid] >  WALK_THRESHOLD);
 

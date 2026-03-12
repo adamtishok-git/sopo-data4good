@@ -494,7 +494,7 @@ def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjac
             majority_sid = max(nbr_counts, key=nbr_counts.get)
             if majority_sid == current_sid:
                 continue
-            if nbr_counts[majority_sid] / total_nbrs < 0.75:
+            if nbr_counts[majority_sid] / total_nbrs < 0.60:
                 continue
             if not removal_preserves_contiguity(block_id, current_sid, assignments, adjacency):
                 continue

@@ -3,7 +3,7 @@ import L from 'leaflet'
 
 const MAP_CENTER   = [43.632, -70.270];
 const MAP_ZOOM     = 13;
-const WALK_RADIUS  = 1609.34;
+const WALK_RADIUS  = 1207.0; // 0.75 miles
 
 function blockStyle(color, isEdited, isSelected) {
   return {
@@ -52,7 +52,7 @@ export default function MapView({
         const curSid = asgnRef.current[block.id];
         const sk     = studKeyRef.current;
         const wd     = curSid ? block.walkDists[curSid] : null;
-        const walkable = wd !== null && wd <= 1609.34;
+        const walkable = wd !== null && wd <= WALK_RADIUS;
         const status = curSid ? (walkable ? 'Walkable' : 'Bussed') : '—';
         const stud = (block[sk] || 0).toFixed(1);
         layer.bindTooltip(

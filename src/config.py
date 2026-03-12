@@ -62,7 +62,7 @@ RECONFIG_SCENARIOS = {
     "small_closed": {"prek1_schools": ["Dyer",  "Kaler"], "g24_schools": ["Brown",  "Skillin"]},
 }
 
-WALK_THRESHOLD_MILES  = 1.0
+WALK_THRESHOLD_MILES  = 0.75
 WALK_THRESHOLD_METERS = WALK_THRESHOLD_MILES * 1609.34
 
 STUDY_AREA = "South Portland, Maine, USA"
