@@ -411,6 +411,107 @@ def smooth_bussed_communities(assignments, blocks_gdf, open_schools, walk_df, dr
     return assignments
 
 
+def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjacency,
+                          max_iterations=10):
+    """
+    Stage 4: Clean up disconnected zone fragments and surrounded outlier blocks.
+
+    Pass A — Fragment consolidation:
+      For each school zone, detect disconnected connected components. Move
+      non-main fragments to the geographically nearest adjacent zone,
+      respecting capacity (prefer under-capacity; fall back to nearest if all full).
+
+    Pass B — Surrounded block consolidation:
+      For each block, if ≥75% of its neighbours belong to a single other zone
+      AND removal preserves source contiguity AND target is under capacity,
+      move it to the majority zone.
+    """
+    import networkx as nx
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+
+    for _ in range(max_iterations):
+        changed = False
+        loads = {sid: sum(blocks_gdf.loc[b, "students"]
+                          for b, s in assignments.items() if s == sid)
+                 for sid in open_school_ids}
+
+        # Pass A: Fragment consolidation
+        for school_id in open_school_ids:
+            zone_blocks = [b for b, s in assignments.items() if s == school_id]
+            if len(zone_blocks) <= 1:
+                continue
+            sub = adjacency.subgraph(zone_blocks)
+            components = list(nx.connected_components(sub))
+            if len(components) <= 1:
+                continue
+            main_component = max(components, key=len)
+            for fragment in sorted(components, key=len):
+                if fragment == main_component:
+                    continue
+                fragment = set(fragment)
+                fragment_students = sum(blocks_gdf.loc[b, "students"] for b in fragment)
+                # Find adjacent schools
+                adj_schools = set()
+                for b in fragment:
+                    for nbr in adjacency.neighbors(b):
+                        ns = assignments.get(nbr)
+                        if ns and ns != school_id:
+                            adj_schools.add(ns)
+                if not adj_schools:
+                    continue
+
+                def avg_drive_frag(sid):
+                    dists = [drive_df.loc[b, sid] for b in fragment
+                             if np.isfinite(drive_df.loc[b, sid])]
+                    return sum(dists) / len(dists) if dists else float("inf")
+
+                under_cap = [s for s in adj_schools
+                             if loads[s] + fragment_students <= capacities[s]]
+                candidates = (sorted(under_cap, key=avg_drive_frag)
+                              if under_cap
+                              else sorted(adj_schools, key=avg_drive_frag))
+                if not candidates:
+                    continue
+                best = candidates[0]
+                for b in fragment:
+                    assignments[b] = best
+                loads[best] += fragment_students
+                loads[school_id] -= fragment_students
+                changed = True
+
+        # Pass B: Surrounded block consolidation
+        for block_id in list(assignments.keys()):
+            current_sid = assignments[block_id]
+            nbr_counts = {}
+            for nbr in adjacency.neighbors(block_id):
+                ns = assignments.get(nbr)
+                if ns:
+                    nbr_counts[ns] = nbr_counts.get(ns, 0) + 1
+            if not nbr_counts:
+                continue
+            total_nbrs = sum(nbr_counts.values())
+            majority_sid = max(nbr_counts, key=nbr_counts.get)
+            if majority_sid == current_sid:
+                continue
+            if nbr_counts[majority_sid] / total_nbrs < 0.75:
+                continue
+            if not removal_preserves_contiguity(block_id, current_sid, assignments, adjacency):
+                continue
+            block_students = blocks_gdf.loc[block_id, "students"]
+            if loads[majority_sid] + block_students > capacities[majority_sid]:
+                continue
+            assignments[block_id] = majority_sid
+            loads[majority_sid] += block_students
+            loads[current_sid] -= block_students
+            changed = True
+
+        if not changed:
+            break
+
+    return assignments
+
+
 def run_scenario(scenario, blocks_gdf, all_schools_gdf, walk_df, drive_df, adjacency):
     """Run full two-stage assignment for one closure scenario."""
     closed = scenario["closed"]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import ScenarioView from './components/ScenarioView'
 import UploadTab    from './components/UploadTab'
 import AboutModal   from './components/AboutModal'
@@ -64,9 +64,9 @@ export default function App() {
   const [scenarioStates,   setScenarioStates]   = useState(null);
 
   // Download handlers registered by the active ScenarioView / UploadTab
-  const downloadHandlers = useRef({ geojson: null, png: null });
+  const [downloadHandlers, setDownloadHandlers] = useState({ geojson: null, png: null });
   function handleRegisterDownload(handlers) {
-    downloadHandlers.current = handlers;
+    setDownloadHandlers(handlers);
   }
 
   useEffect(() => {
@@ -182,21 +182,22 @@ export default function App() {
               onClick={() => setDlDropdownOpen(v => !v)}
               title="Download / Export"
             >
-              ⬇ Export
+              <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24" fill="currentColor" style={{marginRight:'5px',verticalAlign:'middle'}}><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              Export
             </button>
             {dlDropdownOpen && (
               <div className="dl-dropdown">
                 <button
                   className="dl-option"
-                  disabled={!downloadHandlers.current.geojson}
-                  onClick={() => { downloadHandlers.current.geojson?.(); setDlDropdownOpen(false); }}
+                  disabled={!downloadHandlers.geojson}
+                  onClick={() => { downloadHandlers.geojson?.(); setDlDropdownOpen(false); }}
                 >
                   Download GeoJSON
                 </button>
                 <button
                   className="dl-option"
-                  disabled={!downloadHandlers.current.png}
-                  onClick={() => { downloadHandlers.current.png?.(); setDlDropdownOpen(false); }}
+                  disabled={!downloadHandlers.png}
+                  onClick={() => { downloadHandlers.png?.(); setDlDropdownOpen(false); }}
                 >
                   Export PNG
                 </button>

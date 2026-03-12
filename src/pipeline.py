@@ -21,7 +21,7 @@ from src.config import (
 from src.data_loader import load_blocks, load_schools
 from src.network import build_distance_matrices
 from src.contiguity import build_adjacency_graph
-from src.assignment import initial_assignment, balance_capacity, smooth_bussed_communities
+from src.assignment import initial_assignment, balance_capacity, smooth_bussed_communities, consolidate_fragments
 from src.metrics import compute_scenario_metrics, build_summary_table
 from src.visualization import make_scenario_map, save_map
 
@@ -65,6 +65,10 @@ def _run_3stage(blocks_gdf, open_schools, walk_df, drive_df, adjacency, label):
     print(f"    [{label}] Stage 3...")
     asgn = smooth_bussed_communities(asgn, blocks_gdf, open_schools, walk_df, drive_df, adjacency)
     print(f"    [{label}] Stage 2b (re-balance after smoothing)...")
+    asgn = balance_capacity(asgn, blocks_gdf, open_schools, drive_df, adjacency)
+    print(f"    [{label}] Stage 4 (fragment consolidation)...")
+    asgn = consolidate_fragments(asgn, blocks_gdf, open_schools, drive_df, adjacency)
+    print(f"    [{label}] Stage 2c (re-balance after consolidation)...")
     asgn = balance_capacity(asgn, blocks_gdf, open_schools, drive_df, adjacency)
     for sid in open_schools["school_id"]:
         load = sum(blocks_gdf.loc[b, "students"] for b, s in asgn.items() if s == sid)
