@@ -17,10 +17,15 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
   const students   = (block[studentKey] || 0).toFixed(1);
   const baseSchool = block.baseAssignments?.[modeKey];
 
+  const origDist = modeKey === 'g24' ? block.currentSchoolsG24
+    : (modeKey === 'prek1_current' || modeKey === 'prek1_full') ? block.currentSchoolsK1
+    : block.currentSchoolsK4;
+  const origSchool = majoritySchool(origDist);
+
   return (
     <div className="block-popup" style={{ left: pos.x, top: pos.y }}>
       <div className="block-popup-header">
-        <span className="block-popup-id">···{block.id.slice(-6)}</span>
+        <span className="block-popup-id" title={block.id}>···{block.id.slice(-8)}</span>
         {isEdited && <span className="edited-badge">edited</span>}
         <button className="block-popup-close" onClick={onClose}>✕</button>
       </div>
@@ -30,6 +35,11 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
           {isWalkable ? 'Walkable' : 'Bussed'}
         </span>
       </div>
+      {origSchool && (
+        <div className="block-popup-row block-popup-orig">
+          Currently: <strong>{origSchool}</strong>
+        </div>
+      )}
       <select
         className="reassign-select"
         value={assignedSchool || ''}
@@ -47,74 +57,6 @@ function majoritySchool(dist) {
   const entries = Object.entries(dist || {}).filter(([, v]) => v > 0);
   if (!entries.length) return null;
   return entries.sort((a, b) => b[1] - a[1])[0][0];
-}
-
-function ChangedBlocksPanel({ blocks, changedBlockIds, assignments, schools,
-                               visibleSchools, studentKey, modeKey, gcMode,
-                               gradeLevel, prek1Assignments, g24Assignments,
-                               onReassign, onClose }) {
-  const changedBlocks = blocks.filter(b => changedBlockIds.has(b.id));
-
-  return (
-    <div className="changed-panel">
-      <div className="changed-panel-header">
-        <span className="changed-panel-title">Changed Blocks ({changedBlocks.length})</span>
-        <button className="changed-panel-close" onClick={onClose}>✕</button>
-      </div>
-      <div className="changed-panel-body">
-        <table className="changed-panel-table">
-          <thead>
-            <tr>
-              <th>Block</th>
-              <th>Students</th>
-              <th>Mode</th>
-              <th>Original</th>
-              <th>New School</th>
-            </tr>
-          </thead>
-          <tbody>
-            {changedBlocks.map(block => {
-              const sid       = assignments[block.id];
-              const wd        = sid ? block.walkDists[sid] : null;
-              const walkable  = wd !== null && wd <= WALK_THRESHOLD;
-              const students  = (block[studentKey] || 0).toFixed(1);
-              const origDist  = gcMode
-                ? (gradeLevel === 'g24' ? block.currentSchoolsG24 : block.currentSchoolsK1)
-                : block.currentSchoolsK4;
-              const origSchool = majoritySchool(origDist) || '—';
-              const curAssign  = gcMode
-                ? (gradeLevel === 'g24' ? g24Assignments?.[block.id] : prek1Assignments?.[block.id])
-                : sid;
-
-              return (
-                <tr key={block.id}>
-                  <td className="block-id-cell" title={block.id}>···{block.id.slice(-8)}</td>
-                  <td>{students}</td>
-                  <td>
-                    <span className={walkable ? 'tag-walkable' : 'tag-bussed'} style={{ fontSize: 10, padding: '1px 6px' }}>
-                      {walkable ? 'Walk' : 'Bus'}
-                    </span>
-                  </td>
-                  <td className="school-orig">{origSchool}</td>
-                  <td>
-                    <select
-                      className="changed-panel-select"
-                      value={curAssign || ''}
-                      onChange={e => onReassign(block.id, e.target.value)}
-                    >
-                      {visibleSchools.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 }
 
 export default function ScenarioView({
@@ -261,24 +203,6 @@ export default function ScenarioView({
               onClick={() => { onGradeLevelChange('g24'); setSelectedBlock(null); }}
             >2–4</button>
           </div>
-        )}
-        {/* Changed blocks panel — floats bottom-left over map */}
-        {showChangedBlocks && changedBlockIds && (
-          <ChangedBlocksPanel
-            blocks={scenarioData.blocks}
-            changedBlockIds={changedBlockIds}
-            assignments={state.assignments}
-            schools={scenarioData.schools}
-            visibleSchools={visibleSchools}
-            studentKey={studentKey}
-            modeKey={modeKey}
-            gcMode={gcMode}
-            gradeLevel={gradeLevel}
-            prek1Assignments={prek1State?.assignments}
-            g24Assignments={g24State?.assignments}
-            onReassign={handleReassign}
-            onClose={() => setShowChangedBlocks(false)}
-          />
         )}
         {/* % change overlay — floats top-right over map */}
         <div className="change-overlay">

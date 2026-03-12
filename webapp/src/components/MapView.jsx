@@ -9,17 +9,17 @@ function blockStyle(color, isEdited, isSelected, changeMode, isChanged) {
   if (changeMode) {
     if (isChanged) {
       return {
-        fillColor:   '#FFEB3B',
-        fillOpacity: isSelected ? 1 : 0.85,
-        color:       isSelected ? '#e65100' : '#F57F17',
-        weight:      isSelected ? 3 : 2,
+        fillColor:   color,
+        fillOpacity: isSelected ? 1 : 0.92,
+        color:       '#fff',
+        weight:      isSelected ? 3 : 2.5,
         dashArray:   null,
       };
     }
     return {
       fillColor:   color,
-      fillOpacity: 0.15,
-      color:       '#555',
+      fillOpacity: 0.12,
+      color:       '#aaa',
       weight:      0.3,
       dashArray:   null,
     };
