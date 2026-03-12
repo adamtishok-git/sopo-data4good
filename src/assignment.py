@@ -74,6 +74,22 @@ def _assign_seed_blocks(blocks_gdf, open_schools):
     return seeds
 
 
+def _zone_priority(bid, sid, walk_df, drive_df):
+    """Return min(walk_dist, drive_dist) for flood-fill priority.
+
+    Using the minimum of walk and drive distance means blocks that are
+    walkable to a school get priority for that school even if their drive
+    route is slightly longer—this keeps walkable neighborhoods together and
+    avoids the Small/Brown border problem where walk-short but drive-longer
+    blocks were incorrectly given to the wrong school.
+    """
+    wd = walk_df.loc[bid, sid] if sid in walk_df.columns else float("inf")
+    dd = drive_df.loc[bid, sid] if sid in drive_df.columns else float("inf")
+    wd = wd if np.isfinite(wd) else float("inf")
+    dd = dd if np.isfinite(dd) else float("inf")
+    return min(wd, dd)
+
+
 def _adjacent_zone_schools(block_id, open_school_ids, assignments, adjacency):
     """
     Return the set of school_ids that have at least one zone block adjacent
@@ -119,8 +135,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             at_capacity.add(sid)
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                dd = drive_df.loc[nbr, sid]
-                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                p = _zone_priority(nbr, sid, walk_df, drive_df)
+                heapq.heappush(heap, (p, nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase A: grow until proportional target
@@ -140,8 +156,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             continue
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                dd = drive_df.loc[nbr, sid]
-                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                p = _zone_priority(nbr, sid, walk_df, drive_df)
+                heapq.heappush(heap, (p, nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase B: remaining blocks → adjacent zones, hard cap respected
@@ -155,8 +171,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
                 continue
             for nbr in adjacency.neighbors(bid):
                 if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                    dd = drive_df.loc[nbr, sid]
-                    heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                    p = _zone_priority(nbr, sid, walk_df, drive_df)
+                    heapq.heappush(p2_heap, (p, nbr, sid))
                     p2_in_heap.add((nbr, sid))
 
         while p2_heap and unassigned:
@@ -174,8 +190,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             if sid not in at_capacity:
                 for nbr in adjacency.neighbors(bid):
                     if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                        dd = drive_df.loc[nbr, sid]
-                        heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                        p = _zone_priority(nbr, sid, walk_df, drive_df)
+                        heapq.heappush(p2_heap, (p, nbr, sid))
                         p2_in_heap.add((nbr, sid))
 
     # Phase C: orphan blocks — prefer adjacent zone first, then nearest by drive
@@ -413,7 +429,7 @@ def smooth_bussed_communities(assignments, blocks_gdf, open_schools, walk_df, dr
 
 
 def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjacency,
-                          max_iterations=10):
+                          max_iterations=10, walk_df=None, walk_threshold_m=1207.0):
     """
     Stage 4: Clean up disconnected zone fragments and surrounded outlier blocks.
 
@@ -430,6 +446,17 @@ def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjac
     import networkx as nx
     open_school_ids = list(open_schools.index)
     capacities = open_schools["capacity"].to_dict()
+
+    # Pre-compute protected block sets: blocks walkable to their initial school.
+    # These are never moved by Pass A, regardless of capacity dynamics across
+    # iterations.  Only meaningful when walk_df is provided.
+    protected_blocks: set = set()
+    if walk_df is not None:
+        for bid, sid in assignments.items():
+            if sid in walk_df.columns:
+                wd = walk_df.loc[bid, sid]
+                if np.isfinite(wd) and wd <= walk_threshold_m:
+                    protected_blocks.add(bid)
 
     for _ in range(max_iterations):
         changed = False
@@ -460,6 +487,14 @@ def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjac
                         if ns and ns != school_id:
                             adj_schools.add(ns)
                 if not adj_schools:
+                    continue
+
+                # Don't move a fragment if it contains any block that is walkable
+                # to its current school.  The topological disconnection is a
+                # census-block adjacency artifact, not a real geographic problem.
+                # Protection is pre-computed once before the loop to avoid
+                # capacity-cascade false-triggers across iterations.
+                if any(b in protected_blocks for b in fragment):
                     continue
 
                 def avg_drive_frag(sid):
@@ -509,6 +544,63 @@ def consolidate_fragments(assignments, blocks_gdf, open_schools, drive_df, adjac
 
         if not changed:
             break
+
+    return assignments
+
+
+def recover_walkable_assignments(assignments, blocks_gdf, open_schools, walk_df, adjacency,
+                                  walk_threshold_m=1207.0):
+    """
+    Stage 4.5: Walkability recovery.
+
+    Move any block that is walkable to a school OTHER than its current assignment
+    to that school, if:
+      - The block is closer to the target by walk than to its current school
+      - The target has remaining capacity
+      - Removing the block from the source preserves source contiguity
+        (or the source has only 1 block, which is handled gracefully)
+
+    This fixes the case where a school's natural walkable neighbourhood is
+    topologically isolated from its flood-fill zone (e.g. Kaler in small_closed
+    where tract-031 walkable blocks end up in Skillin because the census-block
+    adjacency graph does not connect them to Kaler's main zone).
+    """
+    open_school_ids = list(open_schools.index)
+    capacities = open_schools["capacity"].to_dict()
+    school_loads = {
+        sid: sum(blocks_gdf.loc[b, "students"] for b, s in assignments.items() if s == sid)
+        for sid in open_school_ids
+    }
+
+    changed = True
+    while changed:
+        changed = False
+        for bid in list(assignments.keys()):
+            current_sid = assignments[bid]
+            wd_current = walk_df.loc[bid, current_sid] if current_sid in walk_df.columns else float("inf")
+            if not np.isfinite(wd_current):
+                wd_current = float("inf")
+
+            # Look for schools this block can walk to that are closer by walk
+            walkable_targets = [
+                sid for sid in open_school_ids
+                if sid != current_sid
+                and sid in walk_df.columns
+                and np.isfinite(walk_df.loc[bid, sid])
+                and walk_df.loc[bid, sid] <= walk_threshold_m
+                and walk_df.loc[bid, sid] < wd_current   # must be closer by walk
+                and school_loads[sid] + blocks_gdf.loc[bid, "students"] <= capacities[sid]
+            ]
+            if not walkable_targets:
+                continue
+            if not removal_preserves_contiguity(bid, current_sid, assignments, adjacency):
+                continue
+            best = min(walkable_targets, key=lambda s: walk_df.loc[bid, s])
+            bs = blocks_gdf.loc[bid, "students"]
+            assignments[bid] = best
+            school_loads[best] += bs
+            school_loads[current_sid] -= bs
+            changed = True
 
     return assignments
 
@@ -568,10 +660,6 @@ def equalize_loads(assignments, blocks_gdf, open_schools, drive_df, walk_df, adj
             for block_id in zone_blocks:
                 if utils[src_sid] <= mean_util + imbalance_threshold:
                     break
-                # Never move a block that is walkable to its current school
-                wd = walk_df.loc[block_id, src_sid] if src_sid in walk_df.columns else float("inf")
-                if np.isfinite(wd) and wd <= walk_threshold_m:
-                    continue
                 if not removal_preserves_contiguity(block_id, src_sid, assignments, adjacency):
                     continue
                 adj_under = [
@@ -583,6 +671,16 @@ def equalize_loads(assignments, blocks_gdf, open_schools, drive_df, walk_df, adj
                 if not adj_under:
                     continue
                 best = min(adj_under, key=lambda s: drive_df.loc[block_id, s])
+                # Don't move a block to a school it's farther from by walk:
+                # this preserves walkable-neighborhood cohesion without being
+                # over-restrictive (blocks are only protected if they're
+                # actually closer to source by walk).
+                wd_src  = walk_df.loc[block_id, src_sid] if src_sid in walk_df.columns else float("inf")
+                wd_best = walk_df.loc[block_id, best]    if best    in walk_df.columns else float("inf")
+                if not np.isfinite(wd_src):  wd_src  = float("inf")
+                if not np.isfinite(wd_best): wd_best = float("inf")
+                if wd_src < wd_best:
+                    continue  # block is closer to source school by walk; keep it there
                 bs = blocks_gdf.loc[block_id, "students"]
                 assignments[block_id] = best
                 loads[best] += bs
