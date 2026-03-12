@@ -8,102 +8,117 @@ export default function AboutModal({ onClose }) {
         </div>
         <div className="modal-body">
           <p>
-            This interactive tool models school boundary scenarios for South Portland, Maine's
-            elementary schools. It was built to help residents, city officials, and community
-            members explore the tradeoffs involved in potential school closures and
-            grade-level reconfigurations.
+            South Portland is considering closing one elementary school to address enrollment
+            and budget pressures. This tool lets you explore what that could look like for
+            families across the city — which neighborhoods would stay at their current school,
+            which would move, how far kids would travel, and whether buildings would be over or
+            under their enrollment limits.
           </p>
-
-          <h3>The Data</h3>
           <p>
-            Student and population estimates are derived from 317 Census 2020 blocks across
-            South Portland. Each block's estimated enrollment is calculated proportionally from
-            its population (1,013 K–4 students across 5 schools, based on March 2026 enrollment).
-            Walk and drive distances are computed using real road network data from OpenStreetMap —
-            pedestrian routing automatically accounts for highway crossings and sidewalk
-            connectivity. A 1-mile threshold is used to define walkability.
+            It's designed for anyone who wants to understand the tradeoffs — parents, city
+            officials, school board members, and community members — no technical background
+            needed.
           </p>
 
-          <h3>The Schools</h3>
+          <h3>The Four Scenarios</h3>
+          <p>
+            Each tab represents one school being closed. Skillin is not included because the
+            remaining four schools don't have enough combined space for all current K–4 students.
+          </p>
           <table>
             <thead>
               <tr><th>School</th><th>Capacity</th><th>Notes</th></tr>
             </thead>
             <tbody>
               <tr><td>Brown</td><td>260</td><td></td></tr>
-              <tr><td>Dyer</td><td>240</td><td>Current PreK pilot (29 students)</td></tr>
+              <tr><td>Dyer</td><td>240</td><td>Current PreK pilot site (29 students)</td></tr>
               <tr><td>Small</td><td>280</td><td></td></tr>
-              <tr><td>Skillin</td><td>380</td><td></td></tr>
-              <tr><td>Kaler</td><td>240</td><td>Current PreK pilot (29 students)</td></tr>
+              <tr><td>Skillin</td><td>380</td><td>Not modeled as a closure option</td></tr>
+              <tr><td>Kaler</td><td>240</td><td>Current PreK pilot site (29 students)</td></tr>
             </tbody>
           </table>
-          <p>
-            <em>Closing Skillin is excluded: the remaining four schools (combined capacity 1,020)
-            cannot absorb all 1,013 K–4 students when Skillin closes.</em>
-          </p>
 
           <h3>Viewing Modes</h3>
-          <p>Each scenario can be explored in three modes, selectable via the control bar on the map:</p>
-          <ul>
-            <li>
-              <strong>Community Schools</strong> — all grades (K–4) at each building, as today.
-              The PreK toggle switches between the current pilot (Dyer + Kaler only) and a
-              full-expansion model (29 PreK seats per open school).
-            </li>
-            <li>
-              <strong>Grade Centers: PreK–1</strong> — two buildings serve PreK and Grades 1–2.
-              The PreK toggle switches between 29 seats per center (current) and 58 seats
-              (two merged classes).
-            </li>
-            <li>
-              <strong>Grade Centers: 2–4</strong> — two buildings serve Grades 2–4 (no PreK
-              impact on these buildings).
-            </li>
-          </ul>
-
-          <h3>The Algorithm</h3>
-          <p>Each base assignment was computed using a three-stage algorithm:</p>
-          <ul>
-            <li>
-              <strong>Stage 1 — Flood-fill:</strong> Zones grow outward from each school
-              through the block adjacency graph, respecting each school's proportional
-              capacity target. Each school is first guaranteed a unique seed block closest
-              to it, preventing any school from starting with zero zone blocks.
-            </li>
-            <li>
-              <strong>Stage 2 — Capacity enforcement:</strong> Blocks are moved between zones
-              to ensure no school exceeds its hard capacity, preferring moves that preserve
-              zone contiguity. Moves are tried in priority order: fully contiguous transfers
-              first, then adjacent-zone transfers, then nearest under-capacity school.
-            </li>
-            <li>
-              <strong>Stage 3 — Community cohesion:</strong> Non-walkable blocks are smoothed
-              so that neighboring blocks are assigned to the same school where possible.
-              If moving a block would disconnect its zone into an isolated peninsula, the
-              entire peninsula moves together to keep micro-communities intact.
-            </li>
-          </ul>
-
-          <h3>Using This Tool</h3>
-          <ul>
-            <li>Select a closure scenario using the tabs at the top.</li>
-            <li>Use the segment control on the map to switch between Community Schools, Grade Centers: PreK–1, and Grade Centers: 2–4 modes.</li>
-            <li>Use the PreK toggle to compare current pilot vs. full PreK expansion.</li>
-            <li>Click any census block on the map to see its details and reassign it to a different school.</li>
-            <li>School statistics update instantly as you make changes.</li>
-            <li>Tabs with edits are marked with an orange dot — edits persist as you switch between tabs.</li>
-            <li>Use <strong>Reset to Base</strong> to revert the current mode to its model assignment.</li>
-            <li>Use <strong>Download GeoJSON</strong> to export your modified zone boundaries with all distances and metrics embedded.</li>
-            <li>Use the <strong>Upload Zones</strong> tab to load a GeoJSON file shared by a collaborator and compare their zone plan with live statistics.</li>
-          </ul>
-
-          <h3>Limitations</h3>
           <p>
-            Student counts are estimates based on population proportionality — actual
-            enrollment by home address would produce more precise zone assignments.
-            Walk and drive distances use OpenStreetMap network routing but do not
-            account for crossing guard locations, sidewalk quality, or individual
-            family transportation circumstances.
+            Within each closure scenario, you can switch between three organizational models
+            using the control bar on the map:
+          </p>
+          <ul>
+            <li>
+              <strong>Community Schools</strong> — each building houses all grades K–4, just
+              like today. The PreK toggle lets you compare the current pilot (Dyer and Kaler
+              only) against a full expansion where every open school hosts 29 PreK students.
+            </li>
+            <li>
+              <strong>Grade Centers: PreK–1</strong> — two buildings become early-childhood
+              centers serving PreK through 1st grade. The PreK toggle shows the difference
+              between 29 and 58 PreK seats per center.
+            </li>
+            <li>
+              <strong>Grade Centers: 2–4</strong> — the other two buildings serve Grades 2–4.
+            </li>
+          </ul>
+
+          <h3>How Zone Boundaries Are Drawn</h3>
+          <p>
+            The suggested zone boundaries are generated automatically, not hand-drawn. The
+            process prioritizes three things in order:
+          </p>
+          <ul>
+            <li>
+              <strong>Walkability first</strong> — neighborhoods within a 0.75-mile walk of a
+              school are assigned there whenever possible. Walk distances use real sidewalk and
+              road network data, so a highway or rail line between a home and a school will
+              correctly show as non-walkable even if it looks close on a map.
+            </li>
+            <li>
+              <strong>Capacity limits</strong> — no school is assigned more students than it
+              can hold. If a neighborhood is walkable to a school that's already full, students
+              are redirected to the nearest school with space.
+            </li>
+            <li>
+              <strong>Neighborhood cohesion</strong> — nearby blocks are kept together in the
+              same zone wherever possible, so neighbors and friends are more likely to end up
+              at the same school.
+            </li>
+          </ul>
+          <p>
+            Student counts are estimates based on Census 2020 population data — they reflect
+            where children likely live, not official enrollment records by home address.
+          </p>
+
+          <h3>What You Can Do</h3>
+          <ul>
+            <li>
+              <strong>Explore scenarios</strong> — click the tabs at the top to switch between
+              closure options and see how the map and statistics change.
+            </li>
+            <li>
+              <strong>See who changes schools</strong> — click the <em>% Change Schools</em> button
+              to highlight every block where students would move to a different school. A table
+              shows each affected block with its original and proposed school.
+            </li>
+            <li>
+              <strong>Adjust zone boundaries</strong> — click any colored block on the map to
+              reassign it to a different school. Enrollment stats in the sidebar update instantly.
+            </li>
+            <li>
+              <strong>Reset or export</strong> — use <strong>Reset to Base</strong> to undo your
+              changes, or <strong>Download GeoJSON</strong> to save and share your modified zone map.
+            </li>
+            <li>
+              <strong>Upload a plan</strong> — use the <strong>Upload Zones</strong> tab to load a
+              zone file someone else created and see its live statistics.
+            </li>
+          </ul>
+
+          <h3>A Note on the Numbers</h3>
+          <p>
+            Walk and drive distances reflect actual road network routing, not straight-line
+            distances. However, they don't account for crossing guard locations, the quality
+            of individual sidewalk segments, or family circumstances that affect how kids
+            actually get to school. The enrollment figures are estimates — a family-level
+            address dataset would produce more precise zone assignments.
           </p>
         </div>
       </div>

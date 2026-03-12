@@ -147,6 +147,90 @@ body {
   box-shadow: 0 1px 8px rgba(249,168,37,0.35);
 }
 
+/* ── Changed blocks panel ── */
+.changed-panel {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 400;
+  background: rgba(255,255,255,0.97);
+  border: 1px solid #f9a825;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  backdrop-filter: blur(4px);
+  width: 480px;
+  max-width: calc(100% - 20px);
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+}
+.changed-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid #ffe082;
+  flex-shrink: 0;
+}
+.changed-panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a4f00;
+}
+.changed-panel-close {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.changed-panel-close:hover { color: #444; }
+.changed-panel-body {
+  overflow-y: auto;
+  flex: 1;
+}
+.changed-panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.changed-panel-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff8e1;
+  padding: 4px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #7a4f00;
+  border-bottom: 1px solid #ffe082;
+  white-space: nowrap;
+}
+.changed-panel-table tbody tr:hover { background: #fffde7; }
+.changed-panel-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.changed-panel-table td.block-id-cell {
+  font-family: monospace;
+  font-size: 11px;
+  color: #555;
+}
+.changed-panel-table td.school-orig {
+  color: #888;
+}
+.changed-panel-select {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  max-width: 100px;
+}
+
 /* ── Main content ── */
 .main {
   display: flex;
