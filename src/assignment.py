@@ -35,6 +35,20 @@ import numpy as np
 from src.contiguity import removal_preserves_contiguity, addition_is_contiguous
 from src.config import WALK_THRESHOLD_METERS
 
+# For the initial flood-fill, prefer walk distance for nearby blocks so zones
+# reflect walkable neighborhoods rather than road-network drive quirks.
+# Beyond this cap, fall back to drive distance.
+_WALK_CAP_M = 1.5 * 1609.34  # 1.5 miles
+
+
+def _flood_dist(bid, sid, walk_df, drive_df):
+    """Priority key for flood-fill: walk dist when walkable, else drive dist."""
+    wd = walk_df.loc[bid, sid]
+    if np.isfinite(wd) and wd < _WALK_CAP_M:
+        return wd
+    dd = drive_df.loc[bid, sid]
+    return dd if np.isfinite(dd) else float("inf")
+
 
 def _students_in_zone(school_id, assignments, blocks_gdf):
     total = 0.0
@@ -87,7 +101,12 @@ def _adjacent_zone_schools(block_id, open_school_ids, assignments, adjacency):
 
 
 def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
-    """Stage 1: Three-phase capacity-bounded flood-fill."""
+    """Stage 1: Three-phase capacity-bounded flood-fill.
+
+    Uses walk distance as the priority key for blocks within 1.5 miles of a school
+    so zone boundaries reflect walkable neighborhoods rather than drive-route quirks.
+    Falls back to drive distance for distant/bussed blocks.
+    """
     open_school_ids = list(open_schools.index)
     capacities = open_schools["capacity"].to_dict()
     total_capacity = sum(capacities.values())
@@ -118,8 +137,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             at_capacity.add(sid)
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                dd = drive_df.loc[nbr, sid]
-                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                fd = _flood_dist(nbr, sid, walk_df, drive_df)
+                heapq.heappush(heap, (fd, nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase A: grow until proportional target
@@ -139,8 +158,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             continue
         for nbr in adjacency.neighbors(bid):
             if nbr not in assigned and (nbr, sid) not in in_heap:
-                dd = drive_df.loc[nbr, sid]
-                heapq.heappush(heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                fd = _flood_dist(nbr, sid, walk_df, drive_df)
+                heapq.heappush(heap, (fd, nbr, sid))
                 in_heap.add((nbr, sid))
 
     # Phase B: remaining blocks → adjacent zones, hard cap respected
@@ -154,8 +173,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
                 continue
             for nbr in adjacency.neighbors(bid):
                 if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                    dd = drive_df.loc[nbr, sid]
-                    heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                    fd = _flood_dist(nbr, sid, walk_df, drive_df)
+                    heapq.heappush(p2_heap, (fd, nbr, sid))
                     p2_in_heap.add((nbr, sid))
 
         while p2_heap and unassigned:
@@ -173,8 +192,8 @@ def initial_assignment(blocks_gdf, open_schools, walk_df, drive_df, adjacency):
             if sid not in at_capacity:
                 for nbr in adjacency.neighbors(bid):
                     if nbr in unassigned and (nbr, sid) not in p2_in_heap:
-                        dd = drive_df.loc[nbr, sid]
-                        heapq.heappush(p2_heap, (dd if np.isfinite(dd) else float("inf"), nbr, sid))
+                        fd = _flood_dist(nbr, sid, walk_df, drive_df)
+                        heapq.heappush(p2_heap, (fd, nbr, sid))
                         p2_in_heap.add((nbr, sid))
 
     # Phase C: orphan blocks — prefer adjacent zone first, then nearest by drive
