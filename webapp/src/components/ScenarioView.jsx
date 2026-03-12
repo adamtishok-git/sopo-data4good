@@ -17,11 +17,6 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
   const students   = (block[studentKey] || 0).toFixed(1);
   const baseSchool = block.baseAssignments?.[modeKey];
 
-  const origDist = modeKey === 'g24' ? block.currentSchoolsG24
-    : (modeKey === 'prek1_current' || modeKey === 'prek1_full') ? block.currentSchoolsK1
-    : block.currentSchoolsK4;
-  const origSchool = majoritySchool(origDist);
-
   return (
     <div className="block-popup" style={{ left: pos.x, top: pos.y }}>
       <div className="block-popup-header">
@@ -35,11 +30,6 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
           {isWalkable ? 'Walkable' : 'Bussed'}
         </span>
       </div>
-      {origSchool && (
-        <div className="block-popup-row block-popup-orig">
-          Original School: <strong>{origSchool}</strong>
-        </div>
-      )}
       <select
         className="reassign-select"
         value={assignedSchool || ''}
@@ -53,11 +43,6 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
   );
 }
 
-function majoritySchool(dist) {
-  const entries = Object.entries(dist || {}).filter(([, v]) => v > 0);
-  if (!entries.length) return null;
-  return entries.sort((a, b) => b[1] - a[1])[0][0];
-}
 
 export default function ScenarioView({
   scenarioData, states, active,
