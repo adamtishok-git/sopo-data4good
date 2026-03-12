@@ -249,7 +249,7 @@ function UploadStats({ parsed, assignments, visibleSchools, studentKey, selected
 
 // ── Main UploadTab ────────────────────────────────────────────────────────────
 
-export default function UploadTab({ active, onRegisterDownload }) {
+export default function UploadTab({ active }) {
   const [parsed,        setParsed]        = useState(null);
   const [assignments,   setAssignments]   = useState(null);   // community mode
   const [prek1Asgn,     setPrek1Asgn]     = useState(null);   // grade-center prek1 band
@@ -374,13 +374,6 @@ export default function UploadTab({ active, onRegisterDownload }) {
     gcMode ? g24Asgn   : null,
   );
 
-  // Register download handlers with App
-  useEffect(() => {
-    if (active && onRegisterDownload) {
-      onRegisterDownload({ geojson: null, png: handleExportPNG });
-    }
-  });
-
   return (
     <div ref={viewRef} className="scenario-view">
       <div className="map-container">
@@ -419,6 +412,11 @@ export default function UploadTab({ active, onRegisterDownload }) {
           onReassign={handleReassign}
           onClear={handleClear}
         />
+        <div className="sidebar-actions">
+          <button className="btn btn-secondary" onClick={handleExportPNG}>
+            Export PNG
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import html2canvas from 'html2canvas'
 import MapView    from './MapView'
 import StatsPanel from './StatsPanel'
@@ -9,7 +9,7 @@ export default function ScenarioView({
   scenarioData, states, active,
   modeKey, modeOption, studentKey, visibleSchools,
   gcMode, gradeLevel, onGradeLevelChange,
-  onReassign, onReset, onRegisterDownload,
+  onReassign, onReset,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const viewRef = useRef(null);
@@ -77,13 +77,6 @@ export default function ScenarioView({
     });
   }
 
-  // Register download handlers with App whenever this view is active
-  useEffect(() => {
-    if (active && onRegisterDownload) {
-      onRegisterDownload({ geojson: handleDownloadGeoJSON, png: handleExportPNG });
-    }
-  }); // run every render so handlers always have fresh closures
-
   return (
     <div ref={viewRef} className={`scenario-view${active ? '' : ' hidden'}`}>
       <div className="map-container">
@@ -131,6 +124,14 @@ export default function ScenarioView({
           studentKey={studentKey}
           visibleSchools={visibleSchools}
         />
+        <div className="sidebar-actions">
+          <button className="btn btn-secondary" onClick={handleDownloadGeoJSON}>
+            Download GeoJSON
+          </button>
+          <button className="btn btn-secondary" onClick={handleExportPNG}>
+            Export PNG
+          </button>
+        </div>
       </div>
     </div>
   );

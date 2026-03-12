@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import ScenarioView from './components/ScenarioView'
 import UploadTab    from './components/UploadTab'
 import AboutModal   from './components/AboutModal'
@@ -59,19 +59,9 @@ export default function App() {
   const [modeOption,       setModeOption]       = useState('community_current');
   const [gradeLevel,       setGradeLevel]       = useState('prek1');
   const [showAbout,        setShowAbout]        = useState(false);
-  const [dlDropdownOpen,   setDlDropdownOpen]   = useState(false);
   const [scenarioData,     setScenarioData]     = useState(null);
   const [scenarioStates,   setScenarioStates]   = useState(null);
 
-  // Download handlers registered by the active ScenarioView / UploadTab.
-  // useRef holds the functions (avoids re-render cascade from effect-per-render in ScenarioView).
-  // hasHandlers boolean state controls the disabled prop reactively.
-  const downloadHandlers = useRef({ geojson: null, png: null });
-  const [hasHandlers, setHasHandlers] = useState(false);
-  function handleRegisterDownload(handlers) {
-    downloadHandlers.current = handlers;
-    setHasHandlers(!!(handlers.geojson || handlers.png));
-  }
 
   useEffect(() => {
     Promise.all(SCENARIO_KEYS.map(k => fetch(`/data/${k}.json`).then(r => r.json())))
@@ -130,7 +120,7 @@ export default function App() {
   const studentKey = getStudentKey(modeKey);
 
   return (
-    <div className="app" onClick={() => dlDropdownOpen && setDlDropdownOpen(false)}>
+    <div className="app">
       <header className="header">
         <h1>South Portland Elementary School Redistricting</h1>
         <div className="header-right">
@@ -178,36 +168,6 @@ export default function App() {
           >
             Current Boundaries ↗
           </a>
-
-          {/* Download dropdown */}
-          <div className="dl-wrapper" onClick={e => e.stopPropagation()}>
-            <button
-              className="tab-action-btn dl-btn"
-              onClick={() => setDlDropdownOpen(v => !v)}
-              title="Download / Export"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24" fill="currentColor" style={{marginRight:'5px',verticalAlign:'middle'}}><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-              Export
-            </button>
-            {dlDropdownOpen && (
-              <div className="dl-dropdown">
-                <button
-                  className="dl-option"
-                  disabled={!hasHandlers}
-                  onClick={() => { downloadHandlers.current.geojson?.(); setDlDropdownOpen(false); }}
-                >
-                  Download GeoJSON
-                </button>
-                <button
-                  className="dl-option"
-                  disabled={!hasHandlers}
-                  onClick={() => { downloadHandlers.current.png?.(); setDlDropdownOpen(false); }}
-                >
-                  Export PNG
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -227,12 +187,10 @@ export default function App() {
             onGradeLevelChange={setGradeLevel}
             onReassign={(mk, blockId, school) => reassignBlock(key, mk, blockId, school)}
             onReset={(mk) => resetMode(key, mk)}
-            onRegisterDownload={handleRegisterDownload}
           />
         ))}
         <UploadTab
           active={activeTab === 'upload'}
-          onRegisterDownload={handleRegisterDownload}
         />
       </div>
 
