@@ -8,11 +8,11 @@ export default function AboutModal({ onClose }) {
         </div>
         <div className="modal-body">
           <p>
-            South Portland is considering closing one elementary school to address enrollment
-            and budget pressures. This tool lets you explore what that could look like for
-            families across the city — which neighborhoods would stay at their current school,
-            which would move, how far kids would travel, and whether buildings would be over or
-            under their enrollment limits.
+            South Portland is closing Kaler elementary school. This tool lets you explore
+            two options for how the remaining four schools could be organized — and what
+            that means for families across the city in terms of which school their kids
+            attend, how far they'd travel, and whether buildings would be over or under
+            capacity.
           </p>
           <p>
             It's designed for anyone who wants to understand the tradeoffs — parents, city
@@ -20,10 +20,10 @@ export default function AboutModal({ onClose }) {
             needed.
           </p>
 
-          <h3>The Four Scenarios</h3>
+          <h3>The Two Options</h3>
           <p>
-            Each tab represents one school being closed. Skillin is not included because the
-            remaining four schools don't have enough combined space for all current K–4 students.
+            Both options close Kaler and redistribute its students among the four remaining
+            schools:
           </p>
           <table>
             <thead>
@@ -33,29 +33,18 @@ export default function AboutModal({ onClose }) {
               <tr><td>Brown</td><td>260</td><td></td></tr>
               <tr><td>Dyer</td><td>240</td><td>Current PreK pilot site (29 students)</td></tr>
               <tr><td>Small</td><td>280</td><td></td></tr>
-              <tr><td>Skillin</td><td>380</td><td>Not modeled as a closure option</td></tr>
-              <tr><td>Kaler</td><td>240</td><td>Current PreK pilot site (29 students)</td></tr>
+              <tr><td>Skillin</td><td>380</td><td></td></tr>
             </tbody>
           </table>
-
-          <h3>Viewing Modes</h3>
-          <p>
-            Within each closure scenario, you can switch between three organizational models
-            using the control bar on the map:
-          </p>
           <ul>
             <li>
               <strong>Community Schools</strong> — each building houses all grades K–4, just
-              like today. The PreK toggle lets you compare the current pilot (Dyer and Kaler
-              only) against a full expansion where every open school hosts 29 PreK students.
+              like today. Students are assigned to the nearest school with capacity.
             </li>
             <li>
-              <strong>Grade Centers: PreK–1</strong> — two buildings become early-childhood
-              centers serving PreK through 1st grade. The PreK toggle shows the difference
-              between 29 and 58 PreK seats per center.
-            </li>
-            <li>
-              <strong>Grade Centers: 2–4</strong> — the other two buildings serve Grades 2–4.
+              <strong>Grade Band Schools</strong> — two buildings become early-childhood
+              centers serving PreK through 1st grade, while the other two serve Grades 2–4.
+              Use the toggle above the map to switch between the two grade bands.
             </li>
           </ul>
 
@@ -90,8 +79,8 @@ export default function AboutModal({ onClose }) {
           <h3>What You Can Do</h3>
           <ul>
             <li>
-              <strong>Explore scenarios</strong> — click the tabs at the top to switch between
-              closure options and see how the map and statistics change.
+              <strong>Compare options</strong> — click the tabs at the top to switch between
+              Community Schools and Grade Band Schools and see how the map and statistics change.
             </li>
             <li>
               <strong>See who changes schools</strong> — click the <em>% Change Schools</em> button
