@@ -5,32 +5,7 @@ import AboutModal   from './components/AboutModal'
 
 const BOUNDARIES_URL = 'https://www.arcgis.com/apps/instant/basic/index.html?appid=185441c7918f4681b4653653fc30a27c';
 
-// Alphabetical by school name
-const SCENARIO_KEYS = ['brown_closed', 'dyer_closed', 'kaler_closed', 'small_closed'];
-const SCENARIO_LABELS = {
-  brown_closed: 'Close Brown',
-  dyer_closed:  'Close Dyer',
-  kaler_closed: 'Close Kaler',
-  small_closed: 'Close Small',
-};
-
-const MODE_OPTIONS = [
-  { key: 'community_current', label: 'Community – Current PreK' },
-  { key: 'community_full',    label: 'Community – Full PreK'    },
-  { key: 'prek1_current',     label: 'Grade Centers – Current PreK' },
-  { key: 'prek1_full',        label: 'Grade Centers – Full PreK'    },
-];
-
-const ALL_MODE_KEYS = ['community_current', 'community_full', 'prek1_current', 'prek1_full', 'g24'];
-
-function isGradeCenter(modeOption) {
-  return modeOption.startsWith('prek1');
-}
-
-function resolveModeKey(modeOption, gradeLevel) {
-  if (!isGradeCenter(modeOption)) return modeOption;
-  return gradeLevel === 'g24' ? 'g24' : modeOption;
-}
+const ALL_MODE_KEYS = ['community_current', 'prek1_current', 'g24'];
 
 function getStudentKey(modeKey) {
   if (modeKey.startsWith('prek1')) return 'studentsK1';
@@ -38,13 +13,13 @@ function getStudentKey(modeKey) {
   return 'studentsK4';
 }
 
-function getVisibleSchools(modeKey, scenarioData) {
-  if (modeKey.startsWith('prek1')) return scenarioData.reconfig.prek1Schools;
-  if (modeKey === 'g24')           return scenarioData.reconfig.g24Schools;
-  return scenarioData.openSchools;
+function getVisibleSchools(modeKey, data) {
+  if (modeKey.startsWith('prek1')) return data.reconfig.prek1Schools;
+  if (modeKey === 'g24')           return data.reconfig.g24Schools;
+  return data.openSchools;
 }
 
-function initScenarioStates(data) {
+function initModeStates(data) {
   const states = {};
   for (const modeKey of ALL_MODE_KEYS) {
     const assignments = {};
@@ -55,102 +30,73 @@ function initScenarioStates(data) {
 }
 
 export default function App() {
-  const [activeTab,        setActiveTab]        = useState('brown_closed');
-  const [modeOption,       setModeOption]       = useState('community_current');
-  const [gradeLevel,       setGradeLevel]       = useState('prek1');
-  const [showAbout,        setShowAbout]        = useState(false);
-  const [scenarioData,     setScenarioData]     = useState(null);
-  const [scenarioStates,   setScenarioStates]   = useState(null);
-
+  const [activeTab,    setActiveTab]    = useState('community');
+  const [gradeLevel,   setGradeLevel]   = useState('prek1');
+  const [showAbout,    setShowAbout]    = useState(false);
+  const [data,         setData]         = useState(null);
+  const [modeStates,   setModeStates]   = useState(null);
 
   useEffect(() => {
-    Promise.all(SCENARIO_KEYS.map(k => fetch(`/data/${k}.json`).then(r => r.json())))
-      .then(results => {
-        const data   = {};
-        const states = {};
-        SCENARIO_KEYS.forEach((k, i) => {
-          data[k]   = results[i];
-          states[k] = initScenarioStates(results[i]);
-        });
-        setScenarioData(data);
-        setScenarioStates(states);
+    fetch('/data/kaler_closed.json')
+      .then(r => r.json())
+      .then(d => {
+        setData(d);
+        setModeStates(initModeStates(d));
       });
   }, []);
 
-  function reassignBlock(scenarioKey, modeKey, blockId, newSchool) {
-    setScenarioStates(prev => {
-      const modeState = prev[scenarioKey][modeKey];
+  function reassignBlock(mk, blockId, newSchool) {
+    setModeStates(prev => {
+      const modeState = prev[mk];
       const newAssignments = { ...modeState.assignments, [blockId]: newSchool };
       const newEdited = new Set(modeState.editedBlocks);
-      const base = scenarioData[scenarioKey].blocks.find(b => b.id === blockId)?.baseAssignments[modeKey];
+      const base = data.blocks.find(b => b.id === blockId)?.baseAssignments[mk];
       if (newSchool === base) newEdited.delete(blockId);
       else                    newEdited.add(blockId);
-      return {
-        ...prev,
-        [scenarioKey]: {
-          ...prev[scenarioKey],
-          [modeKey]: { assignments: newAssignments, editedBlocks: newEdited },
-        },
-      };
+      return { ...prev, [mk]: { assignments: newAssignments, editedBlocks: newEdited } };
     });
   }
 
-  function resetMode(scenarioKey, modeKey) {
-    setScenarioStates(prev => {
+  function resetMode(mk) {
+    setModeStates(prev => {
       const newAssignments = {};
-      scenarioData[scenarioKey].blocks.forEach(b => {
-        newAssignments[b.id] = b.baseAssignments[modeKey];
-      });
-      return {
-        ...prev,
-        [scenarioKey]: {
-          ...prev[scenarioKey],
-          [modeKey]: { assignments: newAssignments, editedBlocks: new Set() },
-        },
-      };
+      data.blocks.forEach(b => { newAssignments[b.id] = b.baseAssignments[mk]; });
+      return { ...prev, [mk]: { assignments: newAssignments, editedBlocks: new Set() } };
     });
   }
 
-  if (!scenarioData || !scenarioStates) {
+  if (!data || !modeStates) {
     return <div className="app"><div className="loading">Loading scenario data…</div></div>;
   }
 
-  const gcMode     = isGradeCenter(modeOption);
-  const modeKey    = resolveModeKey(modeOption, gradeLevel);
-  const studentKey = getStudentKey(modeKey);
+  const communityEdits  = modeStates['community_current'].editedBlocks.size > 0;
+  const gradebandEdits  = modeStates['prek1_current'].editedBlocks.size > 0
+                       || modeStates['g24'].editedBlocks.size > 0;
 
   return (
     <div className="app">
       <header className="header">
         <h1>South Portland Elementary School Redistricting</h1>
         <div className="header-right">
-          <select
-            className="mode-select"
-            value={modeOption}
-            onChange={e => { setModeOption(e.target.value); setGradeLevel('prek1'); }}
-          >
-            {MODE_OPTIONS.map(o => (
-              <option key={o.key} value={o.key}>{o.label}</option>
-            ))}
-          </select>
           <button className="btn-about" onClick={() => setShowAbout(true)}>About</button>
         </div>
       </header>
 
       <div className="tabs">
-        {SCENARIO_KEYS.map(key => {
-          const hasEdits = scenarioStates[key][modeKey].editedBlocks.size > 0;
-          return (
-            <button
-              key={key}
-              className={`tab${activeTab === key ? ' active' : ''}`}
-              onClick={() => setActiveTab(key)}
-            >
-              {SCENARIO_LABELS[key]}
-              {hasEdits && <span className="tab-dot" title="Has unsaved edits" />}
-            </button>
-          );
-        })}
+        <button
+          className={`tab${activeTab === 'community' ? ' active' : ''}`}
+          onClick={() => setActiveTab('community')}
+        >
+          Community Schools
+          {communityEdits && <span className="tab-dot" title="Has unsaved edits" />}
+        </button>
+        <button
+          className={`tab${activeTab === 'gradeband' ? ' active' : ''}`}
+          onClick={() => setActiveTab('gradeband')}
+        >
+          Grade Band Schools
+          {gradebandEdits && <span className="tab-dot" title="Has unsaved edits" />}
+        </button>
         <button
           className={`tab${activeTab === 'upload' ? ' active' : ''}`}
           onClick={() => setActiveTab('upload')}
@@ -158,7 +104,6 @@ export default function App() {
           Upload Zones
         </button>
 
-        {/* Right-side tab bar actions */}
         <div className="tabs-right">
           <a
             className="tab-action-btn"
@@ -172,26 +117,35 @@ export default function App() {
       </div>
 
       <div className="main">
-        {SCENARIO_KEYS.map(key => (
-          <ScenarioView
-            key={key}
-            scenarioData={scenarioData[key]}
-            states={scenarioStates[key]}
-            active={activeTab === key}
-            modeKey={modeKey}
-            modeOption={modeOption}
-            studentKey={studentKey}
-            visibleSchools={getVisibleSchools(modeKey, scenarioData[key])}
-            gcMode={gcMode}
-            gradeLevel={gradeLevel}
-            onGradeLevelChange={setGradeLevel}
-            onReassign={(mk, blockId, school) => reassignBlock(key, mk, blockId, school)}
-            onReset={(mk) => resetMode(key, mk)}
-          />
-        ))}
-        <UploadTab
-          active={activeTab === 'upload'}
+        <ScenarioView
+          scenarioData={data}
+          states={modeStates}
+          active={activeTab === 'community'}
+          modeKey="community_current"
+          modeOption="community_current"
+          studentKey="studentsK4"
+          visibleSchools={data.openSchools}
+          gcMode={false}
+          gradeLevel={gradeLevel}
+          onGradeLevelChange={setGradeLevel}
+          onReassign={(mk, blockId, school) => reassignBlock(mk, blockId, school)}
+          onReset={(mk) => resetMode(mk)}
         />
+        <ScenarioView
+          scenarioData={data}
+          states={modeStates}
+          active={activeTab === 'gradeband'}
+          modeKey={gradeLevel === 'g24' ? 'g24' : 'prek1_current'}
+          modeOption="prek1_current"
+          studentKey={getStudentKey(gradeLevel === 'g24' ? 'g24' : 'prek1_current')}
+          visibleSchools={getVisibleSchools(gradeLevel === 'g24' ? 'g24' : 'prek1_current', data)}
+          gcMode={true}
+          gradeLevel={gradeLevel}
+          onGradeLevelChange={setGradeLevel}
+          onReassign={(mk, blockId, school) => reassignBlock(mk, blockId, school)}
+          onReset={(mk) => resetMode(mk)}
+        />
+        <UploadTab active={activeTab === 'upload'} />
       </div>
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
