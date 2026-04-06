@@ -57,7 +57,7 @@ SCENARIOS = [
 # Grade-center reconfiguration: which buildings serve PreK-1 vs Grades 2-4
 RECONFIG_SCENARIOS = {
     "brown_closed": {"prek1_schools": ["Dyer",  "Kaler"], "g24_schools": ["Small",  "Skillin"]},
-    "kaler_closed": {"prek1_schools": ["Dyer",  "Small"], "g24_schools": ["Brown",  "Skillin"]},
+    "kaler_closed": {"prek1_schools": ["Dyer",  "Small"], "g24_schools": ["Skillin", "Brown"]},
     "dyer_closed":  {"prek1_schools": ["Kaler", "Small"], "g24_schools": ["Brown",  "Skillin"]},
     "small_closed": {"prek1_schools": ["Dyer",  "Kaler"], "g24_schools": ["Brown",  "Skillin"]},
 }
