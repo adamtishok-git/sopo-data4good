@@ -16,7 +16,7 @@ export default function StatsPanel({
   const hasEdits = editedBlocks.size > 0;
   const [expanded, setExpanded] = useState({});
 
-  const portableSchoolOptions = [{ value: '', label: 'Not deployed' }, ...visibleSchools.map(s => ({ value: s, label: s }))];
+  const portableSchoolOptions = [{ value: '', label: 'Not deployed' }, ...scenarioData.openSchools.map(s => ({ value: s, label: s }))];
 
   return (
     <>
