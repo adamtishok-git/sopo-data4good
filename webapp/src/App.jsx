@@ -93,6 +93,33 @@ export default function App() {
     });
   }
 
+  function mirrorBandAssignments(scenarioKey, sourceModeKey, targetModeKey) {
+    const { prek1Schools, g24Schools } = scenarioData[scenarioKey].reconfig;
+    // Build school-name remap by index position (Dyer↔Brown, Small↔Skillin, etc.)
+    const mapping = sourceModeKey === 'g24'
+      ? Object.fromEntries(g24Schools.map((s, i) => [s, prek1Schools[i]]))
+      : Object.fromEntries(prek1Schools.map((s, i) => [s, g24Schools[i]]));
+
+    setScenarioStates(prev => {
+      const sourceAssignments = prev[scenarioKey][sourceModeKey].assignments;
+      const newAssignments = {};
+      const newEdited = new Set();
+      for (const [blockId, school] of Object.entries(sourceAssignments)) {
+        newAssignments[blockId] = mapping[school] ?? school;
+      }
+      scenarioData[scenarioKey].blocks.forEach(b => {
+        if (newAssignments[b.id] !== b.baseAssignments[targetModeKey]) newEdited.add(b.id);
+      });
+      return {
+        ...prev,
+        [scenarioKey]: {
+          ...prev[scenarioKey],
+          [targetModeKey]: { assignments: newAssignments, editedBlocks: newEdited },
+        },
+      };
+    });
+  }
+
   function resetMode(scenarioKey, modeKey) {
     setScenarioStates(prev => {
       const newAssignments = {};
@@ -189,6 +216,7 @@ export default function App() {
             onPortableChange={(idx, school) => setPortableAssignments(prev => {
               const next = [...prev]; next[idx] = school; return next;
             })}
+            onMirrorBand={(src, tgt) => mirrorBandAssignments(key, src, tgt)}
           />
         ))}
         <UploadTab

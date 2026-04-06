@@ -50,6 +50,7 @@ export default function ScenarioView({
   gcMode, gradeLevel, onGradeLevelChange,
   onReassign, onReset,
   portableAssignments, onPortableChange,
+  onMirrorBand,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [popupPos,      setPopupPos]      = useState(null);
@@ -80,6 +81,15 @@ export default function ScenarioView({
   function handleReset() {
     setSelectedBlock(null);
     onReset(modeKey);
+  }
+
+  function handleMirrorToBand() {
+    if (gradeLevel === 'prek1') {
+      onMirrorBand(modeOption, 'g24');    // copy prek1_current/full → g24
+    } else {
+      onMirrorBand('g24', modeOption);    // copy g24 → prek1_current/full
+    }
+    setSelectedBlock(null);
   }
 
   function handleDownloadGeoJSON() {
@@ -162,6 +172,16 @@ export default function ScenarioView({
               className={`band-btn${gradeLevel === 'g24' ? ' active' : ''}`}
               onClick={() => { onGradeLevelChange('g24'); setSelectedBlock(null); }}
             >2–4</button>
+            <div className="band-sep" />
+            <button
+              className="band-btn band-btn-mirror"
+              title={gradeLevel === 'prek1'
+                ? 'Apply these zone boundaries to the 2–4 band'
+                : 'Apply these zone boundaries to the PreK–1 band'}
+              onClick={handleMirrorToBand}
+            >
+              {gradeLevel === 'prek1' ? 'Apply → 2–4' : 'Apply → PreK–1'}
+            </button>
           </div>
         )}
         {/* % change overlay — floats top-right over map */}

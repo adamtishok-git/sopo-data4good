@@ -356,6 +356,14 @@ body {
 }
 .band-btn:hover  { background: #f0f0f0; color: #222; }
 .band-btn.active { background: #1a73e8; color: #fff; }
+.band-sep {
+  width: 1px;
+  background: #ddd;
+  margin: 4px 2px;
+  align-self: stretch;
+}
+.band-btn-mirror { color: #1a73e8; font-style: italic; }
+.band-btn-mirror:hover { background: #e8f0fe; color: #1558b0; }
 
 /* ── Over-capacity badge ── */
 .over-badge {
