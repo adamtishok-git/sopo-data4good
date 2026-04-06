@@ -42,7 +42,7 @@ export function computeChangeRate(blocks, gcMode, assignments, prek1Assignments,
   };
 }
 
-const PORTABLE_CAPACITY = 40; // students per portable classroom
+const PORTABLE_CAPACITY = 20; // students per portable classroom
 
 /**
  * Compute per-school metrics for one mode.

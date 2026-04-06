@@ -23,7 +23,7 @@ export default function StatsPanel({
       <div className="sidebar-scroll">
         <div className="sidebar-section">
           <div className="sidebar-section-title">Portable Classrooms</div>
-          <div className="portable-note">2 portables (currently at Small, 40 seats each). Assign to a school to add capacity.</div>
+          <div className="portable-note">2 portables (currently at Small, 20 seats each). Assign to a school to add capacity.</div>
           {[0, 1].map(idx => (
             <div className="portable-row" key={idx}>
               <span className="portable-label">Portable {idx + 1}</span>
