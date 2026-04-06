@@ -49,6 +49,7 @@ export default function ScenarioView({
   modeKey, modeOption, studentKey, visibleSchools,
   gcMode, gradeLevel, onGradeLevelChange,
   onReassign, onReset,
+  portableAssignments, onPortableChange,
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [popupPos,      setPopupPos]      = useState(null);
@@ -180,6 +181,8 @@ export default function ScenarioView({
           modeKey={modeKey}
           studentKey={studentKey}
           visibleSchools={visibleSchools}
+          portableAssignments={portableAssignments}
+          onPortableChange={onPortableChange}
         />
         <div className="sidebar-actions sidebar-export-row">
           <button className="btn btn-secondary btn-export" onClick={handleDownloadGeoJSON}>

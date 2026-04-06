@@ -6,18 +6,39 @@ const GRADE_LABELS = { k: 'K', g1: '1', g2: '2', g3: '3', g4: '4' };
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
   onReset, modeKey, studentKey, visibleSchools,
+  portableAssignments, onPortableChange,
 }) {
   const { schools } = scenarioData;
   const prekAllocations = scenarioData.prekAllocations[modeKey] || {};
   const metrics = computeMetrics(
-    scenarioData.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations
+    scenarioData.blocks, assignments, visibleSchools, schools, studentKey, prekAllocations, portableAssignments
   );
   const hasEdits = editedBlocks.size > 0;
   const [expanded, setExpanded] = useState({});
 
+  const portableSchoolOptions = [{ value: '', label: 'Not deployed' }, ...visibleSchools.map(s => ({ value: s, label: s }))];
+
   return (
     <>
       <div className="sidebar-scroll">
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Portable Classrooms</div>
+          <div className="portable-note">2 portables (currently at Small, 40 seats each). Assign to a school to add capacity.</div>
+          {[0, 1].map(idx => (
+            <div className="portable-row" key={idx}>
+              <span className="portable-label">Portable {idx + 1}</span>
+              <select
+                className="portable-select"
+                value={portableAssignments[idx] || ''}
+                onChange={e => onPortableChange(idx, e.target.value || null)}
+              >
+                {portableSchoolOptions.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
         <div className="sidebar-section">
           <div className="sidebar-section-title">School Enrollment</div>
           {visibleSchools.map(sid => {
@@ -48,6 +69,7 @@ export default function StatsPanel({
                 <div className={`school-stat${isOver ? ' stat-over' : ''}`}>
                   {m.totalEnrolled.toFixed(0)} / {m.capacity} enrolled
                   {m.prekCount > 0 && <span className="prek-note"> (incl. {m.prekCount} PreK)</span>}
+                  {m.portableCount > 0 && <span className="prek-note"> +{m.portableCount} portable{m.portableCount > 1 ? 's' : ''}</span>}
                 </div>
                 <div className="school-stat">
                   {m.pctWalkable.toFixed(0)}% walkable
@@ -56,6 +78,10 @@ export default function StatsPanel({
                 <div className="school-stat">
                   {m.avgDriveNonWalkMi !== null ? m.avgDriveNonWalkMi.toFixed(2) + ' mi avg drive' : '—'}
                   {m.maxDriveMi !== null && <span className="stat-muted"> · max {m.maxDriveMi.toFixed(2)} mi</span>}
+                </div>
+                <div className="school-stat">
+                  {m.estPctMinority !== null ? m.estPctMinority.toFixed(0) + '% est. minority' : '—'}
+                  <span className="stat-muted"> (census block race data)</span>
                 </div>
                 {isExp && (
                   <div className="grade-breakdown">

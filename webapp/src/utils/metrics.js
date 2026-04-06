@@ -42,13 +42,16 @@ export function computeChangeRate(blocks, gcMode, assignments, prek1Assignments,
   };
 }
 
+const PORTABLE_CAPACITY = 40; // students per portable classroom
+
 /**
  * Compute per-school metrics for one mode.
  *
  * studentKey: "studentsK4" | "studentsK1" | "studentsG24"
  * prekAllocations: {schoolId: prekCount}
+ * portableAssignments: array of school names (or null) — each adds PORTABLE_CAPACITY to that school
  */
-export function computeMetrics(blocks, assignments, openSchools, schools, studentKey, prekAllocations = {}) {
+export function computeMetrics(blocks, assignments, openSchools, schools, studentKey, prekAllocations = {}, portableAssignments = []) {
   const metrics = {};
 
   for (const sid of openSchools) {
@@ -56,7 +59,8 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
     const zoneStudents = zoneBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
     const prekCount    = prekAllocations[sid] || 0;
     const totalEnrolled = zoneStudents + prekCount;
-    const capacity = schools[sid].capacity;
+    const portableCount = portableAssignments.filter(s => s === sid).length;
+    const capacity = schools[sid].capacity + portableCount * PORTABLE_CAPACITY;
 
     // Walkable = pedestrian route exists via OSM AND distance ≤ 0.75-mile policy threshold
     const walkableBlocks    = zoneBlocks.filter(b => b.walkDists[sid] !== null && b.walkDists[sid] <= WALK_THRESHOLD);
@@ -90,11 +94,26 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
       gradeTotals[g] = Math.round(zoneBlocks.reduce((s, b) => s + ((b.studentsPerGrade || {})[g] || 0), 0) * 10) / 10;
     }
 
+    // Estimated % minority: population-weighted average of census block minority rates,
+    // weighted by K-4 student count. Blocks with no census population are excluded.
+    let estPctMinority = null;
+    const totalStudentsForRace = zoneBlocks.reduce((s, b) => s + (b[studentKey] || 0), 0);
+    if (totalStudentsForRace > 0) {
+      const weightedMinority = zoneBlocks.reduce((s, b) => {
+        const pop = b.raceTotal || 0;
+        if (pop === 0) return s;
+        const minorityRate = (b.raceMinority || 0) / pop;
+        return s + minorityRate * (b[studentKey] || 0);
+      }, 0);
+      estPctMinority = Math.round(weightedMinority / totalStudentsForRace * 100 * 10) / 10;
+    }
+
     metrics[sid] = {
       zoneStudents:         Math.round(zoneStudents * 10) / 10,
       walkableStudents:     Math.round(walkableStudents * 10) / 10,
       nonWalkableStudents:  Math.round(nonWalkableStudents * 10) / 10,
       prekCount,
+      portableCount,
       totalEnrolled:        Math.round(totalEnrolled * 10) / 10,
       capacity,
       utilization:          capacity > 0 ? totalEnrolled / capacity : 0,
@@ -103,6 +122,7 @@ export function computeMetrics(blocks, assignments, openSchools, schools, studen
       avgDriveNonWalkMi:    avgDriveNonWalkMi !== null ? Math.round(avgDriveNonWalkMi * 100) / 100 : null,
       maxDriveMi:           maxDriveMi !== null ? Math.round(maxDriveMi * 100) / 100 : null,
       gradeTotals,
+      estPctMinority,
     };
   }
   return metrics;

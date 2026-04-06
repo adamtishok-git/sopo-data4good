@@ -25,6 +25,10 @@ drive_df.index = drive_df.index.astype(str)
 
 NO_STUDENTS_BLOCKS = {"230050030022012"}  # Retirement community
 
+# Load census race/ethnicity data (minority = non-white-non-Hispanic)
+with open("data/race_by_block.json") as f:
+    race_by_block = json.load(f)
+
 blocks_gdf = gpd.read_file("Polygons.geojson")
 blocks_gdf = blocks_gdf.rename(columns={"GEOID20": "block_id", "POP20": "population"})
 blocks_gdf["block_id"]   = blocks_gdf["block_id"].astype(str)
@@ -108,6 +112,7 @@ for scenario in SCENARIOS:
         drive_dists = {sid: safe_dist(drive_df, bid, sid) for sid in open_school_ids}
         base_assignments = {mode: asgn.get(bid) for mode, asgn in modes.items()}
 
+        race = race_by_block.get(bid, {})
         blocks_out.append({
             "id":               bid,
             "geometry":         row["geometry"].__geo_interface__,
@@ -123,6 +128,11 @@ for scenario in SCENARIOS:
             "baseAssignments":  base_assignments,
             "walkDists":        walk_dists,
             "driveDists":       drive_dists,
+            # Race/ethnicity from 2020 Census (block level)
+            # minority = total pop minus Non-Hispanic White alone
+            "raceTotal":      race.get("total", 0),
+            "raceMinority":   race.get("minority", 0),
+            "pctMinority":    race.get("pct_minority"),
         })
 
     out = {

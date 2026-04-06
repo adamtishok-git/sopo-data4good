@@ -370,6 +370,34 @@ body {
   font-weight: 600;
 }
 
+/* ── Portable classrooms ── */
+.portable-note {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8px;
+}
+.portable-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.portable-label {
+  font-size: 12px;
+  color: #555;
+  white-space: nowrap;
+  min-width: 72px;
+}
+.portable-select {
+  flex: 1;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
 /* ── PreK note & muted stat ── */
 .prek-note {
   font-size: 11px;

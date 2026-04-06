@@ -5,13 +5,9 @@ import AboutModal   from './components/AboutModal'
 
 const BOUNDARIES_URL = 'https://www.arcgis.com/apps/instant/basic/index.html?appid=185441c7918f4681b4653653fc30a27c';
 
-// Alphabetical by school name
-const SCENARIO_KEYS = ['brown_closed', 'dyer_closed', 'kaler_closed', 'small_closed'];
+const SCENARIO_KEYS = ['kaler_closed'];
 const SCENARIO_LABELS = {
-  brown_closed: 'Close Brown',
-  dyer_closed:  'Close Dyer',
   kaler_closed: 'Close Kaler',
-  small_closed: 'Close Small',
 };
 
 const MODE_OPTIONS = [
@@ -55,12 +51,14 @@ function initScenarioStates(data) {
 }
 
 export default function App() {
-  const [activeTab,        setActiveTab]        = useState('brown_closed');
+  const [activeTab,        setActiveTab]        = useState('kaler_closed');
   const [modeOption,       setModeOption]       = useState('community_current');
   const [gradeLevel,       setGradeLevel]       = useState('prek1');
   const [showAbout,        setShowAbout]        = useState(false);
   const [scenarioData,     setScenarioData]     = useState(null);
   const [scenarioStates,   setScenarioStates]   = useState(null);
+  // portableAssignments[0] and [1]: school name or null (none)
+  const [portableAssignments, setPortableAssignments] = useState([null, null]);
 
 
   useEffect(() => {
@@ -187,6 +185,10 @@ export default function App() {
             onGradeLevelChange={setGradeLevel}
             onReassign={(mk, blockId, school) => reassignBlock(key, mk, blockId, school)}
             onReset={(mk) => resetMode(key, mk)}
+            portableAssignments={portableAssignments}
+            onPortableChange={(idx, school) => setPortableAssignments(prev => {
+              const next = [...prev]; next[idx] = school; return next;
+            })}
           />
         ))}
         <UploadTab
