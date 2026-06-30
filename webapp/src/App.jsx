@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import ScenarioView from './components/ScenarioView'
 import UploadTab    from './components/UploadTab'
 import AboutModal   from './components/AboutModal'
+import { useIsMobile } from './utils/useIsMobile.js'
 
 const BOUNDARIES_URL = 'https://www.arcgis.com/apps/instant/basic/index.html?appid=185441c7918f4681b4653653fc30a27c';
 
@@ -59,6 +60,7 @@ export default function App() {
   const [scenarioStates,   setScenarioStates]   = useState(null);
   // portableAssignments[0] and [1]: school name or null (none)
   const [portableAssignments, setPortableAssignments] = useState([null, null]);
+  const isMobile = useIsMobile(); // mobile is view-only; editing is desktop-only
 
 
   useEffect(() => {
@@ -179,12 +181,14 @@ export default function App() {
             </button>
           );
         })}
-        <button
-          className={`tab${activeTab === 'upload' ? ' active' : ''}`}
-          onClick={() => setActiveTab('upload')}
-        >
-          Upload Zones
-        </button>
+        {!isMobile && (
+          <button
+            className={`tab${activeTab === 'upload' ? ' active' : ''}`}
+            onClick={() => setActiveTab('upload')}
+          >
+            Upload Zones
+          </button>
+        )}
 
         {/* Right-side tab bar actions */}
         <div className="tabs-right">
@@ -198,6 +202,15 @@ export default function App() {
           </a>
         </div>
       </div>
+
+      {isMobile && (
+        <div className="mobile-viewonly-banner">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+          </svg>
+          <span>View-only on mobile — open on a computer to draw or edit boundaries.</span>
+        </div>
+      )}
 
       <div className="main">
         {SCENARIO_KEYS.map(key => (

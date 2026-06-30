@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { computeMetrics } from '../utils/metrics.js'
+import { useIsMobile } from '../utils/useIsMobile.js'
 
 const GRADE_LABELS = { k: 'K', g1: '1', g2: '2', g3: '3', g4: '4' };
 
@@ -31,12 +32,14 @@ export default function StatsPanel({
   );
   const hasEdits = editedBlocks.size > 0;
   const [expanded, setExpanded] = useState({});
+  const isMobile = useIsMobile(); // mobile = view-only (no portables/reset editing)
 
   const portableSchoolOptions = [{ value: '', label: 'Not deployed' }, ...scenarioData.openSchools.map(s => ({ value: s, label: s }))];
 
   return (
     <>
       <div className="sidebar-scroll">
+        {!isMobile && (
         <div className="sidebar-section">
           <div className="sidebar-section-title">Portable Classrooms</div>
           <div className="portable-note">2 portables (currently at Small, 20 seats each). Assign to a school to add capacity.</div>
@@ -55,6 +58,7 @@ export default function StatsPanel({
             </div>
           ))}
         </div>
+        )}
         <div className="sidebar-section">
           <div className="sidebar-section-title">School Enrollment</div>
           {visibleSchools.map(sid => {
@@ -122,12 +126,14 @@ export default function StatsPanel({
         </div>
       </div>
 
-      <div className="sidebar-actions">
-        <button className="btn btn-secondary" onClick={onReset}
-          disabled={!hasEdits} style={{ opacity: hasEdits ? 1 : 0.45 }}>
-          Reset to Base
-        </button>
-      </div>
+      {!isMobile && (
+        <div className="sidebar-actions">
+          <button className="btn btn-secondary" onClick={onReset}
+            disabled={!hasEdits} style={{ opacity: hasEdits ? 1 : 0.45 }}>
+            Reset to Base
+          </button>
+        </div>
+      )}
     </>
   );
 }

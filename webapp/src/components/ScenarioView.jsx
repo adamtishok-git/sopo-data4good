@@ -4,6 +4,7 @@ import MapView    from './MapView'
 import StatsPanel from './StatsPanel'
 import { downloadGeoJSON } from '../utils/download.js'
 import { computeChangeRate } from '../utils/metrics.js'
+import { useIsMobile } from '../utils/useIsMobile.js'
 
 const WALK_THRESHOLD = 1207.0;
 const GRADE_LABELS   = { k: 'K', g1: '1st', g2: '2nd', g3: '3rd', g4: '4th' };
@@ -22,7 +23,7 @@ function computeBandsInSync(reconfig, prek1Assignments, g24Assignments, blocks) 
 }
 
 function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
-                      studentKey, modeKey, pos, onReassign, onClose }) {
+                      studentKey, modeKey, pos, onReassign, onClose, readOnly }) {
   const assignedSchool = assignments[block.id];
   const walkDist   = assignedSchool ? block.walkDists[assignedSchool] : null;
   const isWalkable = walkDist !== null && walkDist <= WALK_THRESHOLD;
@@ -39,19 +40,27 @@ function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
       </div>
       <div className="block-popup-row">{students} est. students</div>
       <div className="block-popup-row">
+        <span className="block-popup-school">
+          <span className="school-dot" style={{ background: schools[assignedSchool]?.color }} />
+          {assignedSchool || '—'}
+        </span>
         <span className={isWalkable ? 'tag-walkable' : 'tag-bussed'}>
           {isWalkable ? 'Walkable' : 'Bussed'}
         </span>
       </div>
-      <select
-        className="reassign-select"
-        value={assignedSchool || ''}
-        onChange={e => onReassign(block.id, e.target.value)}
-      >
-        {visibleSchools.map(sid => (
-          <option key={sid} value={sid}>{sid}{sid === baseSchool ? ' (base)' : ''}</option>
-        ))}
-      </select>
+      {readOnly ? (
+        <div className="block-popup-hint">Open on a computer to reassign this area.</div>
+      ) : (
+        <select
+          className="reassign-select"
+          value={assignedSchool || ''}
+          onChange={e => onReassign(block.id, e.target.value)}
+        >
+          {visibleSchools.map(sid => (
+            <option key={sid} value={sid}>{sid}{sid === baseSchool ? ' (base)' : ''}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
@@ -67,7 +76,9 @@ export default function ScenarioView({
 }) {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [popupPos,      setPopupPos]      = useState(null);
+  const [sheetOpen,     setSheetOpen]     = useState(false); // mobile bottom-sheet
   const viewRef = useRef(null);
+  const isMobile = useIsMobile(); // mobile = view-only (editing is desktop-only)
 
   const state      = states[modeKey];
   const prek1State = gcMode ? (states[modeOption] || { assignments: {} }) : null;
@@ -186,6 +197,7 @@ export default function ScenarioView({
             pos={popupPos}
             onReassign={handleReassign}
             onClose={() => setSelectedBlock(null)}
+            readOnly={isMobile}
           />
         )}
         {/* Grade-band overlay — floats top-center over map */}
@@ -229,7 +241,18 @@ export default function ScenarioView({
         </div>
       </div>
 
-      <div className="sidebar">
+      <div className={`sidebar${sheetOpen ? ' sheet-open' : ''}`}>
+        <button
+          className="sheet-handle"
+          onClick={() => setSheetOpen(o => !o)}
+          aria-expanded={sheetOpen}
+        >
+          <span className="sheet-handle-grip" />
+          <span className="sheet-handle-label">School Enrollment</span>
+          <svg className="sheet-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 14l5-5 5 5z" />
+          </svg>
+        </button>
         <StatsPanel
           scenarioData={scenarioData}
           assignments={state.assignments}
@@ -241,6 +264,7 @@ export default function ScenarioView({
           portableAssignments={portableAssignments}
           onPortableChange={onPortableChange}
         />
+        {!isMobile && (
         <div className="sidebar-actions sidebar-export-row">
           <button className="btn btn-secondary btn-export" onClick={handleDownloadGeoJSON}>
             <svg xmlns="http://www.w3.org/2000/svg" height="13" width="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
@@ -251,6 +275,7 @@ export default function ScenarioView({
             PNG
           </button>
         </div>
+        )}
       </div>
     </div>
   );
