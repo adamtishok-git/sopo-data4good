@@ -7,7 +7,7 @@ const BOUNDARIES_URL = 'https://www.arcgis.com/apps/instant/basic/index.html?app
 
 const SCENARIO_KEYS = ['kaler_closed'];
 const SCENARIO_LABELS = {
-  kaler_closed: 'Close Kaler',
+  kaler_closed: 'Boundary Planner',
 };
 
 const MODE_OPTIONS = [
@@ -147,7 +147,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>South Portland Elementary School Redistricting</h1>
+        <div className="header-titles">
+          <h1>South Portland Elementary School Redistricting</h1>
+          <div className="header-subtitle">Scenario: Kaler Elementary closes</div>
+        </div>
         <div className="header-right">
           <select
             className="mode-select"

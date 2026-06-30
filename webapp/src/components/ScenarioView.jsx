@@ -8,6 +8,19 @@ import { computeChangeRate } from '../utils/metrics.js'
 const WALK_THRESHOLD = 1207.0;
 const GRADE_LABELS   = { k: 'K', g1: '1st', g2: '2nd', g3: '3rd', g4: '4th' };
 
+// Are the two grade bands drawing the same boundaries? Compares the current
+// PreK–1 layout against the 2–4 layout via the position-based school mapping
+// (Dyer↔Skillin, Small↔Brown). In sync ⇒ nothing to copy.
+function computeBandsInSync(reconfig, prek1Assignments, g24Assignments, blocks) {
+  const { prek1Schools, g24Schools } = reconfig;
+  const map = Object.fromEntries(prek1Schools.map((s, i) => [s, g24Schools[i]]));
+  for (const b of blocks) {
+    const expected = map[prek1Assignments[b.id]] ?? prek1Assignments[b.id];
+    if (g24Assignments[b.id] !== expected) return false;
+  }
+  return true;
+}
+
 function BlockPopup({ block, assignments, editedBlocks, visibleSchools, schools,
                       studentKey, modeKey, pos, onReassign, onClose }) {
   const assignedSchool = assignments[block.id];
@@ -60,6 +73,12 @@ export default function ScenarioView({
   const prek1State = gcMode ? (states[modeOption] || { assignments: {} }) : null;
   const g24State   = gcMode ? (states['g24']      || { assignments: {} }) : null;
 
+  // Cross-band sync status (grade-center mode only)
+  const anyBandEdited = gcMode
+    && ((prek1State.editedBlocks?.size > 0) || (g24State.editedBlocks?.size > 0));
+  const bandsInSync = gcMode
+    && computeBandsInSync(scenarioData.reconfig, prek1State.assignments, g24State.assignments, scenarioData.blocks);
+
   // % change calculation
   const changeInfo = computeChangeRate(
     scenarioData.blocks,
@@ -84,6 +103,14 @@ export default function ScenarioView({
   }
 
   function handleMirrorToBand() {
+    const targetState = gradeLevel === 'prek1' ? g24State : prek1State;
+    const targetLabel = gradeLevel === 'prek1' ? '2–4' : 'PreK–1';
+    if (targetState?.editedBlocks?.size > 0) {
+      const ok = window.confirm(
+        `This will replace your existing ${targetLabel} edits with these boundaries. Continue?`
+      );
+      if (!ok) return;
+    }
     if (gradeLevel === 'prek1') {
       onMirrorBand(modeOption, 'g24');    // copy prek1_current/full → g24
     } else {
@@ -172,16 +199,26 @@ export default function ScenarioView({
               className={`band-btn${gradeLevel === 'g24' ? ' active' : ''}`}
               onClick={() => { onGradeLevelChange('g24'); setSelectedBlock(null); }}
             >2–4</button>
-            <div className="band-sep" />
-            <button
-              className="band-btn band-btn-mirror"
-              title={gradeLevel === 'prek1'
-                ? 'Apply these zone boundaries to the 2–4 band'
-                : 'Apply these zone boundaries to the PreK–1 band'}
-              onClick={handleMirrorToBand}
-            >
-              {gradeLevel === 'prek1' ? 'Apply → 2–4' : 'Apply → PreK–1'}
-            </button>
+            {anyBandEdited && (
+              <>
+                <div className="band-sep" />
+                {bandsInSync ? (
+                  <span className="band-sync" title="PreK–1 and 2–4 are drawing the same boundaries">
+                    ✓ Boundaries in sync
+                  </span>
+                ) : (
+                  <button
+                    className="band-btn band-btn-mirror"
+                    title={gradeLevel === 'prek1'
+                      ? 'Copy your edited PreK–1 boundaries onto the 2–4 boundaries (replaces the current 2–4 boundaries)'
+                      : 'Copy your edited 2–4 boundaries onto the PreK–1 boundaries (replaces the current PreK–1 boundaries)'}
+                    onClick={handleMirrorToBand}
+                  >
+                    {gradeLevel === 'prek1' ? 'Copy edits to 2–4' : 'Copy edits to PreK–1'}
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
         {/* % change overlay — floats top-right over map */}

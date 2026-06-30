@@ -20,7 +20,9 @@ body {
   flex-shrink: 0;
   z-index: 100;
 }
+.header-titles { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
 .header h1 { font-size: 15px; font-weight: 600; color: #222; }
+.header-subtitle { font-size: 11px; font-weight: 500; color: #6b7280; }
 .header-right { display: flex; gap: 10px; align-items: center; }
 .btn-about {
   background: none; border: 1px solid #ddd; border-radius: 5px;
@@ -364,8 +366,30 @@ body {
 }
 .band-btn-mirror { color: #1a73e8; font-style: italic; }
 .band-btn-mirror:hover { background: #e8f0fe; color: #1558b0; }
+.band-sync {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e8e5a;
+  white-space: nowrap;
+}
 
 /* ── Over-capacity badge ── */
+.band-tag {
+  display: inline-block;
+  font-size: 10px;
+  background: #eef1f4;
+  color: #5a6573;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .over-badge {
   display: inline-block;
   font-size: 10px;

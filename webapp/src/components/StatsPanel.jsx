@@ -3,6 +3,22 @@ import { computeMetrics } from '../utils/metrics.js'
 
 const GRADE_LABELS = { k: 'K', g1: '1', g2: '2', g3: '3', g4: '4' };
 
+// Which grades a school actually serves under the current mode.
+// Grade-center model: PreK-1 schools serve K+1; grade centers serve 2-4.
+// Community model: every school serves K-4.
+function gradesForMode(modeKey) {
+  if (modeKey.startsWith('prek1')) return ['k', 'g1'];
+  if (modeKey === 'g24')          return ['g2', 'g3', 'g4'];
+  return ['k', 'g1', 'g2', 'g3', 'g4'];
+}
+
+const BAND_LABELS = { prek1: 'Grades PreK–1', g24: 'Grades 2–4' };
+function bandLabel(modeKey) {
+  if (modeKey.startsWith('prek1')) return BAND_LABELS.prek1;
+  if (modeKey === 'g24')          return BAND_LABELS.g24;
+  return null;
+}
+
 export default function StatsPanel({
   scenarioData, assignments, editedBlocks,
   onReset, modeKey, studentKey, visibleSchools,
@@ -55,6 +71,7 @@ export default function StatsPanel({
                 >
                   <span className="school-dot" style={{ background: schools[sid].color }} />
                   <span className="school-name">{sid}</span>
+                  {bandLabel(modeKey) && <span className="band-tag">{bandLabel(modeKey)}</span>}
                   {isOver && <span className="over-badge">OVER</span>}
                   <svg className="expand-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                     {isExp
@@ -85,7 +102,13 @@ export default function StatsPanel({
                 </div>
                 {isExp && (
                   <div className="grade-breakdown">
-                    {['k', 'g1', 'g2', 'g3', 'g4'].map(g => (
+                    {m.prekCount > 0 && (
+                      <div className="grade-item">
+                        <span className="grade-label">PreK</span>
+                        <span className="grade-count">{Math.round(m.prekCount)}</span>
+                      </div>
+                    )}
+                    {gradesForMode(modeKey).map(g => (
                       <div key={g} className="grade-item">
                         <span className="grade-label">{GRADE_LABELS[g]}</span>
                         <span className="grade-count">{Math.round(m.gradeTotals[g] || 0)}</span>
